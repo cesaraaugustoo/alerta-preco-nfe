@@ -38,4 +38,5 @@ jobs:
       - run: python -m ruff check --output-format=github .
       - name: mypy
         shell: bash
-        run: python -m mypy | sed -E 's/^([^:]+):([0-9]+): error: (.*)$/::error file=\1,line=\2::\3/'
+        run: |
+          python -m mypy | sed -E 's/^([^:]+):([0-9]+): error: (.*)$/::error file=\1,line=\2::\3/'
