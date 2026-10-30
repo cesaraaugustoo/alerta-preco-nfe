@@ -1,0 +1,365 @@
+{
+  "a_vista.xml": {
+    "chave_acesso": "31260911111111000111550010000001141000001140",
+    "numero": "114",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 55.55,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "M1",
+        "descricao": "PRODUTO A VISTA",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 55.55,
+        "valor_nf_item": 55.55,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "boleto_menor.xml": {
+    "chave_acesso": "31260911111111000111550010000001011000001010",
+    "numero": "121",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 280.1,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "A1",
+        "descricao": "PRODUTO A",
+        "quantidade": 2,
+        "unidade": "CX",
+        "valor_total": 350,
+        "valor_nf_item": 200.07,
+        "quantidade_tributada": 2,
+        "unidade_tributada": "CX"
+      },
+      {
+        "codigo_produto": "A2",
+        "descricao": "PRODUTO B",
+        "quantidade": 3,
+        "unidade": "KG",
+        "valor_total": 140,
+        "valor_nf_item": 80.03,
+        "quantidade_tributada": 3,
+        "unidade_tributada": "KG"
+      }
+    ]
+  },
+  "bonificacao.xml": {
+    "chave_acesso": "31260911111111000111550010000001051000001050",
+    "numero": "105",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "REMESSA EM BONIFICACAO",
+    "valor_fatura": 0,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "E1",
+        "descricao": "PRODUTO BRINDE",
+        "quantidade": 2,
+        "unidade": "UN",
+        "valor_total": 49,
+        "valor_nf_item": 0,
+        "quantidade_tributada": 2,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "campos_estranhos.xml": {
+    "chave_acesso": "31260911111111000111550010000001091000001090",
+    "numero": "109",
+    "data_emissao": "2026-09-15",
+    "natureza_operacao": null,
+    "valor_fatura": 19.5,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": null,
+        "descricao": "PRODUTO &amp; CIA &lt;NOVO&gt;",
+        "quantidade": 0,
+        "unidade": "UN",
+        "valor_total": 12,
+        "valor_nf_item": 12.82,
+        "quantidade_tributada": null,
+        "unidade_tributada": null
+      },
+      {
+        "codigo_produto": "H3",
+        "descricao": "PRODUTO COM ESPACO",
+        "quantidade": 10,
+        "unidade": "CX",
+        "valor_total": 6.25,
+        "valor_nf_item": 6.68,
+        "quantidade_tributada": 10,
+        "unidade_tributada": "CX"
+      }
+    ]
+  },
+  "devolucao.xml": {
+    "chave_acesso": "31260911111111000111550010000001111000001110",
+    "numero": "111",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "DEVOLUCAO DE COMPRA",
+    "valor_fatura": 0,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "J1",
+        "descricao": "PRODUTO DEVOLVIDO",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 70,
+        "valor_nf_item": 0,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "dez_duplicatas.xml": {
+    "chave_acesso": "31260911111111000111550010000001131000001130",
+    "numero": "113",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 0.9999999999999999,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "L1",
+        "descricao": "PRODUTO PARCELADO",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 1,
+        "valor_nf_item": 1,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "duas_duplicatas.xml": {
+    "chave_acesso": "31260911111111000111550010000001061000001060",
+    "numero": "106",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 700,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "000777",
+        "descricao": "PRODUTO ZERO A ESQUERDA",
+        "quantidade": 6,
+        "unidade": "KG",
+        "valor_total": 700,
+        "valor_nf_item": 700,
+        "quantidade_tributada": 6,
+        "unidade_tributada": "KG"
+      }
+    ]
+  },
+  "frete_outros.xml": {
+    "chave_acesso": "31260911111111000111550010000001041000001040",
+    "numero": "104",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 432.57,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "D1",
+        "descricao": "PRODUTO COM FRETE",
+        "quantidade": 4,
+        "unidade": "CX",
+        "valor_total": 400,
+        "valor_nf_item": 432.57,
+        "quantidade_tributada": 4,
+        "unidade_tributada": "CX"
+      }
+    ]
+  },
+  "ipi.xml": {
+    "chave_acesso": "31260911111111000111550010000001031000001030",
+    "numero": "103",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 285.57,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "C1",
+        "descricao": "PRODUTO COM IPI",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 200,
+        "valor_nf_item": 205.57,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      },
+      {
+        "codigo_produto": "C2",
+        "descricao": "PRODUTO IPI ISENTO",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 80,
+        "valor_nf_item": 80,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "meio_centavo.xml": {
+    "chave_acesso": "31260911111111000111550010000001071000001070",
+    "numero": "107",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 12.25,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "F1",
+        "descricao": "PRODUTO MEIO A",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 12.75,
+        "valor_nf_item": 6.38,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      },
+      {
+        "codigo_produto": "F2",
+        "descricao": "PRODUTO MEIO B",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 11.75,
+        "valor_nf_item": 5.88,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "nao_e_nfe.xml": null,
+  "sem_rateio.xml": {
+    "chave_acesso": "31260911111111000111550010000001121000001120",
+    "numero": "112",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 100.005,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "K1",
+        "descricao": "PRODUTO FECHADO",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 100,
+        "valor_nf_item": 100,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "st_icms10.xml": {
+    "chave_acesso": "31260911111111000111550010000001021000001020",
+    "numero": "102",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 166.62,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "B1",
+        "descricao": "PRODUTO COM ST",
+        "quantidade": 10,
+        "unidade": "UN",
+        "valor_total": 100,
+        "valor_nf_item": 113.62,
+        "quantidade_tributada": 10,
+        "unidade_tributada": "UN"
+      },
+      {
+        "codigo_produto": "B2",
+        "descricao": "PRODUTO SEM ST",
+        "quantidade": 5,
+        "unidade": "UN",
+        "valor_total": 53,
+        "valor_nf_item": 53,
+        "quantidade_tributada": 5,
+        "unidade_tributada": "UN"
+      }
+    ]
+  },
+  "tpag90_com_duplicata.xml": {
+    "chave_acesso": "31260911111111000111550010000001081000001080",
+    "numero": "122",
+    "data_emissao": "2026-09-14",
+    "natureza_operacao": "VENDA DE MERCADORIA",
+    "valor_fatura": 340,
+    "emitente": {
+      "cnpj": "11111111000111",
+      "nome": "FORNECEDOR A LTDA"
+    },
+    "destinatario_cnpj": "22222222000122",
+    "itens": [
+      {
+        "codigo_produto": "G1",
+        "descricao": "PRODUTO COBRADO",
+        "quantidade": 1,
+        "unidade": "UN",
+        "valor_total": 340,
+        "valor_nf_item": 340,
+        "quantidade_tributada": 1,
+        "unidade_tributada": "UN"
+      }
+    ]
+  }
+}

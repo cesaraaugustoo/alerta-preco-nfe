@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00"><NFe><infNFe Id="NFe31260911111111000111550010000001051000001050" versao="4.00">
+<ide><natOp>REMESSA EM BONIFICACAO</natOp><nNF>105</nNF><dhEmi>2026-09-14T08:00:00-03:00</dhEmi></ide>
+<emit><CNPJ>11111111000111</CNPJ><xNome>FORNECEDOR A LTDA</xNome></emit>
+<dest><CNPJ>22222222000122</CNPJ><xNome>CLIENTE X</xNome></dest>
+<det nItem="1"><prod><cProd>E1</cProd><xProd>PRODUTO BRINDE</xProd><uCom>UN</uCom><qCom>2.0000</qCom><vProd>49.00</vProd><uTrib>UN</uTrib><qTrib>2.0000</qTrib></prod><imposto></imposto></det>
+<total><ICMSTot><vNF>49.00</vNF></ICMSTot></total>
+<pag><detPag><tPag>90</tPag><vPag>0.00</vPag></detPag></pag>
+</infNFe></NFe><protNFe><infProt><chNFe>31260911111111000111550010000001051000001050</chNFe></infProt></protNFe></nfeProc>

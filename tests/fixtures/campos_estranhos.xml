@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00"><NFe><infNFe Id="NFe31260911111111000111550010000001091000001090" versao="4.00">
+<ide><nNF>109</nNF><dEmi>2026-09-15</dEmi></ide>
+<emit><CNPJ>11111111000111</CNPJ><xNome>FORNECEDOR A LTDA</xNome></emit>
+<dest><CNPJ>22222222000122</CNPJ><xNome>CLIENTE X</xNome></dest>
+<det nItem="1"><prod><cProd></cProd><xProd>PRODUTO &amp; CIA &lt;NOVO&gt;</xProd><uCom>UN</uCom><qCom>abc</qCom><vProd>12,50</vProd><uTrib></uTrib><qTrib>0</qTrib></prod><imposto></imposto></det>
+<det nItem="2"><prod><cProd>H2</cProd><xProd></xProd><uCom>UN</uCom><qCom>1.0000</qCom><vProd>9.00</vProd><uTrib>UN</uTrib><qTrib>1.0000</qTrib></prod><imposto></imposto></det>
+<det nItem="3"><prod><cProd>H3</cProd><xProd>  PRODUTO COM ESPACO  </xProd><uCom> CX </uCom><qCom>1e1</qCom><vProd>6.25x</vProd><uTrib> CX </uTrib><qTrib>1e1</qTrib><vOutro></vOutro></prod><imposto></imposto></det>
+<total><ICMSTot><vNF>19.50</vNF></ICMSTot></total>
+<pag><detPag><tPag>15</tPag><vPag>19.50</vPag></detPag></pag>
+</infNFe></NFe></nfeProc>

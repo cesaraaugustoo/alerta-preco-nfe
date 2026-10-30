@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00"><NFe><infNFe Id="NFe31260911111111000111550010000001071000001070" versao="4.00">
+<ide><natOp>VENDA DE MERCADORIA</natOp><nNF>107</nNF><dhEmi>2026-09-14T08:00:00-03:00</dhEmi></ide>
+<emit><CNPJ>11111111000111</CNPJ><xNome>FORNECEDOR A LTDA</xNome></emit>
+<dest><CNPJ>22222222000122</CNPJ><xNome>CLIENTE X</xNome></dest>
+<det nItem="1"><prod><cProd>F1</cProd><xProd>PRODUTO MEIO A</xProd><uCom>UN</uCom><qCom>1.0000</qCom><vProd>12.75</vProd><uTrib>UN</uTrib><qTrib>1.0000</qTrib></prod><imposto></imposto></det>
+<det nItem="2"><prod><cProd>F2</cProd><xProd>PRODUTO MEIO B</xProd><uCom>UN</uCom><qCom>1.0000</qCom><vProd>11.75</vProd><uTrib>UN</uTrib><qTrib>1.0000</qTrib></prod><imposto></imposto></det>
+<total><ICMSTot><vNF>24.50</vNF></ICMSTot></total>
+<cobr><fat><nFat>1</nFat></fat><dup><nDup>001</nDup><dVenc>2026-10-01</dVenc><vDup>12.25</vDup></dup></cobr><pag><detPag><tPag>15</tPag><vPag>24.50</vPag></detPag></pag>
+</infNFe></NFe><protNFe><infProt><chNFe>31260911111111000111550010000001071000001070</chNFe></infProt></protNFe></nfeProc>

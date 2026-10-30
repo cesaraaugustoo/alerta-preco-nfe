@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00"><NFe><infNFe Id="NFe31260911111111000111550010000001131000001130" versao="4.00">
+<ide><natOp>VENDA DE MERCADORIA</natOp><nNF>113</nNF><dhEmi>2026-09-14T08:00:00-03:00</dhEmi></ide>
+<emit><CNPJ>11111111000111</CNPJ><xNome>FORNECEDOR A LTDA</xNome></emit>
+<dest><CNPJ>22222222000122</CNPJ><xNome>CLIENTE X</xNome></dest>
+<det nItem="1"><prod><cProd>L1</cProd><xProd>PRODUTO PARCELADO</xProd><uCom>UN</uCom><qCom>1.0000</qCom><vProd>1.00</vProd><uTrib>UN</uTrib><qTrib>1.0000</qTrib></prod><imposto></imposto></det>
+<total><ICMSTot><vNF>1.00</vNF></ICMSTot></total>
+<cobr><fat><nFat>1</nFat></fat><dup><nDup>001</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>002</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>003</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>004</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>005</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>006</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>007</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>008</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>009</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup><dup><nDup>010</nDup><dVenc>2026-10-01</dVenc><vDup>0.10</vDup></dup></cobr><pag><detPag><tPag>15</tPag><vPag>1.00</vPag></detPag></pag>
+</infNFe></NFe><protNFe><infProt><chNFe>31260911111111000111550010000001131000001130</chNFe></infProt></protNFe></nfeProc>

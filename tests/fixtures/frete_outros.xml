@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc versao="4.00"><NFe><infNFe Id="NFe31260911111111000111550010000001041000001040" versao="4.00">
+<ide><natOp>VENDA DE MERCADORIA</natOp><nNF>104</nNF><dhEmi>2026-09-14T08:00:00-03:00</dhEmi></ide>
+<emit><CNPJ>11111111000111</CNPJ><xNome>FORNECEDOR A LTDA</xNome></emit>
+<dest><CNPJ>22222222000122</CNPJ><xNome>CLIENTE X</xNome></dest>
+<det nItem="1"><prod><cProd>D1</cProd><xProd>PRODUTO COM FRETE</xProd><uCom>CX</uCom><qCom>4.0000</qCom><vProd>400.00</vProd><uTrib>CX</uTrib><qTrib>4.0000</qTrib><vFrete>37.00</vFrete><vOutro>2.57</vOutro></prod><imposto></imposto></det>
+<total><ICMSTot><vNF>432.57</vNF></ICMSTot></total>
+<pag><detPag><tPag>15</tPag><vPag>432.57</vPag></detPag></pag>
+</infNFe></NFe><protNFe><infProt><chNFe>31260911111111000111550010000001041000001040</chNFe></infProt></protNFe></nfeProc>
