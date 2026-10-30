@@ -21,7 +21,8 @@ DIAS_DE_HISTORICO = 120
 # Até quantos dias antes da semana uma nota atrasada ainda é avaliada.
 DIAS_DE_ATRASO = 14
 
-CAMINHO_PADRAO = Path.home() / "alerta-preco" / "config.toml"
+PASTA_LOCAL = Path.home() / "alerta-preco"  # configuração, estado e prévias, fora do repositório
+CAMINHO_PADRAO = PASTA_LOCAL / "config.toml"
 
 
 class ErroDeConfiguracao(Exception):

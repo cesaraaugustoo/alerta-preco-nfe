@@ -15,6 +15,7 @@ from alerta_preco.estado import (
     ja_enviada,
     notas_da_rodada,
     registrar_envio,
+    segunda_da_semana,
     semana_anterior,
     semanas_entre,
 )
@@ -23,6 +24,10 @@ SEGUNDA = date(2026, 3, 16)
 
 
 class TestSemanas(unittest.TestCase):
+    def test_segunda_da_semana(self) -> None:
+        self.assertEqual(segunda_da_semana(date(2026, 3, 16)), SEGUNDA)
+        self.assertEqual(segunda_da_semana(date(2026, 3, 22)), SEGUNDA)
+
     def test_semana_anterior_a_partir_de_qualquer_dia(self) -> None:
         self.assertEqual(semana_anterior(date(2026, 3, 16)), date(2026, 3, 9))
         self.assertEqual(semana_anterior(date(2026, 3, 22)), date(2026, 3, 9))

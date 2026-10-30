@@ -29,19 +29,19 @@ class Estado:
     avisado_antes: dict[str, float] = field(default_factory=dict)
 
 
-def _segunda(dia: date) -> date:
+def segunda_da_semana(dia: date) -> date:
     return dia - timedelta(days=dia.weekday())
 
 
 def semana_anterior(hoje: date) -> date:
     """A segunda-feira da semana passada."""
-    return _segunda(hoje) - timedelta(days=7)
+    return segunda_da_semana(hoje) - timedelta(days=7)
 
 
 def semanas_entre(de: date, ate: date) -> list[tuple[str, str]]:
     """As semanas, de segunda a domingo, que cobrem o intervalo; a última corta na data final."""
     semanas: list[tuple[str, str]] = []
-    inicio = _segunda(de)
+    inicio = segunda_da_semana(de)
     while inicio <= ate:
         fim = min(inicio + timedelta(days=6), ate)
         semanas.append((inicio.isoformat(), fim.isoformat()))
