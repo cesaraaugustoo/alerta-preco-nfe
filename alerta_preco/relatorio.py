@@ -87,7 +87,7 @@ def _fornecedor(cnpj: str | None, nome: str | None, apelidos: Mapping[str, str])
 
 
 def _subtitulo(alerta: Alerta, dados: DadosDoRelatorio) -> str:
-    lojas = list(dict.fromkeys(dados.lojas[c] for c in alerta.destinatarios if c in dados.lojas))
+    lojas = list(dict.fromkeys(dados.lojas[c] for c in alerta.destinatarios if c is not None and c in dados.lojas))
     partes = [_fornecedor(alerta.emitente_cnpj, alerta.emitente_nome, dados.apelidos), " e ".join(lojas)]
     return ", ".join(p for p in partes if p)
 
