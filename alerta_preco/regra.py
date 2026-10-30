@@ -123,15 +123,23 @@ def _anteriores(linhas: Iterable[LinhaDePreco], data: str) -> list[LinhaDePreco]
     return [x for x in linhas if x.data_emissao < data][-COMPRAS_NA_BASE:]
 
 
+def _codigo_do_produto(produto: str) -> str:
+    return produto.rpartition("|")[0]
+
+
 def _base(
     linha: LinhaDePreco,
     por_produto: Mapping[str, list[LinhaDePreco]],
     por_materia: Mapping[str, list[LinhaDePreco]],
+    por_codigo: Mapping[str, list[LinhaDePreco]],
 ) -> tuple[float, str] | None:
     anteriores = _anteriores(por_produto[linha.produto], linha.data_emissao)
     if anteriores:
         return mediana(x.preco for x in anteriores), MESMO_PRODUTO
     if linha.materia_prima is None:
+        return None
+    # O mesmo código comprado antes em outra unidade: a comparação poria caixa contra unidade e daria uma alta falsa.
+    if _anteriores(por_codigo[_codigo_do_produto(linha.produto)], linha.data_emissao):
         return None
     outras = _anteriores(por_materia[linha.materia_prima], linha.data_emissao)
     if not outras:
@@ -167,8 +175,10 @@ def avaliar_rodada(
     """Os alertas das notas em `chaves`. `linhas` traz o histórico inteiro, na ordem de `linhas_de_preco`."""
     por_produto: dict[str, list[LinhaDePreco]] = defaultdict(list)
     por_materia: dict[str, list[LinhaDePreco]] = defaultdict(list)
+    por_codigo: dict[str, list[LinhaDePreco]] = defaultdict(list)
     for linha in linhas:
         por_produto[linha.produto].append(linha)
+        por_codigo[_codigo_do_produto(linha.produto)].append(linha)
         if linha.materia_prima is not None:
             por_materia[linha.materia_prima].append(linha)
 
@@ -183,7 +193,7 @@ def avaliar_rodada(
         if linha.produto in estreias:
             base, como = estreias[linha.produto], TROCOU
         else:
-            achada = _base(linha, por_produto, por_materia)
+            achada = _base(linha, por_produto, por_materia, por_codigo)
             if achada is None:
                 sem_base.add(linha.produto)
                 continue

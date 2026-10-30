@@ -194,6 +194,24 @@ class TestAvaliacao(unittest.TestCase):
         avaliacao = avaliar_rodada(linhas_de_preco([_nota("a", "2026-03-02", _item("1", 74))], regras), {"a"}, {})
         self.assertEqual(avaliacao.produtos_sem_base, 1)
 
+    def test_item_que_muda_de_unidade_fica_sem_base(self) -> None:
+        regras = {f"{RAIZ_A}|1": RegraProduto("insumo", 1.0)}
+        linhas = linhas_de_preco(
+            [_nota("a", "2026-03-02", _item("1", 11, unidade="UN")), _nota("b", "2026-03-09", _item("1", 125, 2, unidade="CX"))],
+            regras,
+        )
+        avaliacao = avaliar_rodada(linhas, {"b"}, {})
+        self.assertEqual(avaliacao.alertas, [])
+        self.assertEqual(avaliacao.produtos_sem_base, 1)
+
+    def test_outro_fornecedor_com_a_mesma_materia_prima_continua_como_troca(self) -> None:
+        regras = {f"{RAIZ_A}|1": RegraProduto("insumo", 1.0), f"{RAIZ_B}|1": RegraProduto("insumo", 1.0)}
+        linhas = linhas_de_preco(
+            [_nota("a", "2026-03-02", _item("1", 100, unidade="UN"), raiz=RAIZ_A), _nota("b", "2026-03-09", _item("1", 125, 2, unidade="CX"), raiz=RAIZ_B)],
+            regras,
+        )
+        self.assertEqual(avaliar_rodada(linhas, {"b"}, {}).alertas[0].como, "trocou")
+
     def _troca(self, *notas: Nota) -> list[LinhaDePreco]:
         regras = {f"{RAIZ_A}|1": RegraProduto("insumo", 1.0), f"{RAIZ_B}|9": RegraProduto("insumo", 1.0)}
         return linhas_de_preco([_nota("a", "2026-03-02", _item("1", 100), raiz=RAIZ_A), *notas], regras)

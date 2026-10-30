@@ -22,6 +22,9 @@ de preço, mas vira só uma contagem no rodapé. Nota de outro fornecedor com bo
 - **Base:** a mediana das 4 compras anteriores do mesmo produto, de datas anteriores à da linha. A mediana não deixa um preço errado virar
   o novo normal.
 
+A base fica de fora, e o produto só entra na contagem de "sem base", em dois casos: sem compra anterior do produto e sem matéria-prima para
+comparar, ou quando o mesmo código já foi comprado em outra unidade. Neste último, a comparação poria caixa contra unidade.
+
 Exemplo, com as compras anteriores a R$ 100,00, R$ 100,00, R$ 110,00 e R$ 125,00: a base é R$ 105,00.
 
 ## Produto novo: a troca
@@ -53,3 +56,4 @@ semanas, até a mediana alcançá-lo.
 | Quando | O que mudou | Por quê |
 |---|---|---|
 | 30/10/2026 | Produto que estreia na rodada: todas as notas usam a base da primeira. Antes, a segunda nota era comparada com a estreia, e a alta dela sumia ou encolhia | O valor mostrado cobria só parte do que a troca custou. Efeito colateral: como as notas agora somam, uma estreia em notas pequenas pode passar do mínimo de R$ 20,00 e virar alerta |
+| 30/10/2026 | Item cujo código já foi comprado em outra unidade: fica "sem base", sem comparar pela matéria-prima | A comparação punha caixa contra unidade e daria uma alta falsa |
