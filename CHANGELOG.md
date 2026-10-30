@@ -12,6 +12,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
 - Leitura do banco, do serviço de notas e das tabelas locais.
 - Estado das rodadas, com a nota atrasada e a não repetição de avisos.
 - Relatório em texto e HTML, e o ensaio da semana com prévia salva.
+- Envio do e-mail por SSH, com `--email`, `--teste` e `--reenviar`, e aviso na tela quando ele não sai.
 - `fornecedores_boleto_conhecido` na configuração local: o fornecedor cujo boleto difere dos itens de forma permanente vira só uma
   contagem no rodapé, em vez de um aviso toda semana. A nota continua fora do cálculo de preço.
 

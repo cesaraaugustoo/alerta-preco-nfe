@@ -9,22 +9,26 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import config, regra
+from .envio import ErroDeEnvio, aviso_na_tela, enviar_email
 from .estado import (
     ErroDeEstado,
     avisados_da_rodada,
     carregar_estado,
+    gravar_estado,
     ja_enviada,
     notas_da_rodada,
+    registrar_envio,
     segunda_da_semana,
     semana_anterior,
     semanas_entre,
 )
 from .fontes import Banco, ErroDeFonte, canceladas_no_espiao, ler_credenciais, ler_tabelas
 from .modelos import Relatorio
-from .relatorio import DadosDoRelatorio, brl, dia_e_mes, montar_relatorio, numero
+from .relatorio import DadosDoRelatorio, brl, dia_e_mes, intervalo, montar_relatorio, numero
 from .xml_nota import conferir_leitura, ler_pasta
 
 DIFERENCAS_NA_TELA = 20
+_TITULO_DA_FALHA = "Alerta de preço: falhou"
 
 
 def _hoje() -> date:
@@ -81,9 +85,10 @@ class _Rodada:
     avisados: dict[str, float]
 
 
-def _montar_rodada(segunda: date, hoje: date, teste: bool = False, reenviar: bool = False) -> _Rodada:
+def _montar_rodada(
+    cfg: config.Config, segunda: date, hoje: date, teste: bool = False, reenviar: bool = False
+) -> _Rodada:
     """Lê as fontes e calcula o relatório da semana. Não envia e não grava estado."""
-    cfg = config.carregar_config()
     estado = carregar_estado()
     banco = Banco(ler_credenciais(cfg.arquivo_env))
     tabelas = ler_tabelas(cfg.pasta_negocio)
@@ -136,14 +141,42 @@ def _salvar_previa(relatorio: Relatorio, segunda: date) -> tuple[Path, Path]:
     return texto, pagina
 
 
+def _segunda(semana: str | None, hoje: date) -> date:
+    return segunda_da_semana(date.fromisoformat(semana)) if semana else semana_anterior(hoje)
+
+
 def _ensaio(semana: str | None) -> int:
     """Mostra e salva a prévia. Não envia nem grava estado."""
     hoje = _hoje()
-    segunda = segunda_da_semana(date.fromisoformat(semana)) if semana else semana_anterior(hoje)
-    rodada = _montar_rodada(segunda, hoje)
+    segunda = _segunda(semana, hoje)
+    rodada = _montar_rodada(config.carregar_config(), segunda, hoje)
     texto, pagina = _salvar_previa(rodada.relatorio, segunda)
     print(f"Assunto: {rodada.relatorio.assunto}\n\n{rodada.relatorio.texto}")
     print(f"(Ensaio: nada enviado. Prévia em {texto} e {pagina}.)")
+    return 0
+
+
+def _enviar(semana: str | None, teste: bool, reenviar: bool) -> int:
+    """Manda o e-mail. O estado só é gravado depois de ele sair, e nunca no teste."""
+    cfg = config.carregar_config()
+    hoje = _hoje()
+    segunda = _segunda(semana, hoje)
+    if not teste and not reenviar and ja_enviada(carregar_estado(), segunda):
+        periodo = intervalo(segunda.isoformat(), (segunda + timedelta(days=6)).isoformat())
+        print(f"A semana {periodo} já foi enviada; nada a fazer. Com --reenviar, manda de novo.")
+        return 0
+
+    rodada = _montar_rodada(cfg, segunda, hoje, teste, reenviar)
+    texto, _ = _salvar_previa(rodada.relatorio, segunda)
+    extras = () if teste else cfg.destinatarios_extras
+    try:
+        print(enviar_email(cfg.vps_ssh, cfg.arquivo_env_remoto, rodada.relatorio, extras))
+    except ErroDeEnvio as e:
+        print(f"O e-mail não saiu ({e}). O relatório está em {texto}.", file=sys.stderr)
+        aviso_na_tela(_TITULO_DA_FALHA, f"O e-mail não saiu ({e}). O relatório está em {texto}.")
+        return 1
+    if not teste:
+        gravar_estado(registrar_envio(carregar_estado(), segunda, rodada.chaves, rodada.avisados))
     return 0
 
 
@@ -156,15 +189,25 @@ def main(argumentos: list[str] | None = None) -> int:
         "--conferir-leitura", type=Path, metavar="ARQUIVO", help="compara a leitura com a do JavaScript"
     )
     parser.add_argument("--simular", nargs=2, metavar=("DE", "ATE"), help="repete as rodadas de um período, sem enviar")
+    parser.add_argument("--email", action="store_true", help="manda o e-mail; sem isto, é só um ensaio")
+    parser.add_argument("--teste", action="store_true", help="com --email: marcado como teste, sem extras e sem estado")
+    parser.add_argument("--reenviar", action="store_true", help="com --email: manda de novo uma semana já enviada")
     args = parser.parse_args(argumentos)
+    if (args.teste or args.reenviar) and not args.email:
+        print("--teste e --reenviar só valem com --email.", file=sys.stderr)
+        return 1
     try:
         if args.conferir_leitura:
             return _conferir_leitura(args.conferir_leitura)
         if args.simular:
             return _simular(*args.simular)
+        if args.email:
+            return _enviar(args.semana, args.teste, args.reenviar)
         return _ensaio(args.semana)
     except (config.ErroDeConfiguracao, ErroDeFonte, ErroDeEstado, OSError, ValueError) as e:
         print(e, file=sys.stderr)
+        if args.email:
+            aviso_na_tela(_TITULO_DA_FALHA, str(e))
         return 1
 
 

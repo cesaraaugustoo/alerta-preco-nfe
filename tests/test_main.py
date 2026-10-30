@@ -8,7 +8,8 @@ from pathlib import Path
 from unittest import mock
 
 from alerta_preco.__main__ import main
-from alerta_preco.estado import Estado, gravar_estado, registrar_envio
+from alerta_preco.envio import ErroDeEnvio
+from alerta_preco.estado import Estado, carregar_estado, gravar_estado, registrar_envio
 from alerta_preco.fontes import ErroDeFonte
 from alerta_preco.relatorio import montar_relatorio
 
@@ -91,7 +92,7 @@ def _xml(chave: str, data: str, preco: str, numero: str) -> str:
     )
 
 
-class TestSimular(unittest.TestCase):
+class _Cenario(unittest.TestCase):
     def setUp(self) -> None:
         pasta = tempfile.TemporaryDirectory()
         self.addCleanup(pasta.cleanup)
@@ -123,6 +124,7 @@ class TestSimular(unittest.TestCase):
             codigo = main(list(argumentos))
         return codigo, saida.getvalue()
 
+class TestSimular(_Cenario):
     def test_mostra_os_alertas_semana_a_semana(self) -> None:
         codigo, saida = self._rodar("--simular", "2026-03-02", "2026-03-15")
         self.assertEqual(codigo, 0)
@@ -152,7 +154,7 @@ class TestSimular(unittest.TestCase):
         self.assertEqual(self._rodar("--simular", "ontem", "2026-03-15")[0], 1)
 
 
-class TestEnsaio(TestSimular):
+class _CenarioDeEnsaio(_Cenario):
     """O mesmo cenário: 03/03 a 100,00; 10/03 a 140,00; 11/03 cancelada no banco."""
 
     def setUp(self) -> None:
@@ -167,6 +169,7 @@ class TestEnsaio(TestSimular):
             patch.start()
             self.addCleanup(patch.stop)
 
+class TestEnsaio(_CenarioDeEnsaio):
     def test_semana_mostra_e_salva_a_previa(self) -> None:
         codigo, saida = self._rodar("--semana", "2026-03-09")
         self.assertEqual(codigo, 0)
@@ -235,6 +238,118 @@ class TestEnsaio(TestSimular):
         codigo, saida = self._rodar("--semana", "2026-03-09")
         self.assertEqual(codigo, 1)
         self.assertIn("estado.json", saida)
+
+
+class TestEmail(_CenarioDeEnsaio):
+    RESPOSTA = "E-mail enviado para 1 destinatario(s)."
+
+    def setUp(self) -> None:
+        super().setUp()
+        config = self.pasta / "config.toml"
+        config.write_text(config.read_text(encoding="utf-8").replace("destinatarios_extras = []", "destinatarios_extras = ['pessoa@exemplo.com']"), encoding="utf-8")
+        self.estado = self.local / "estado.json"
+        for nome, destino in (("enviar", "enviar_email"), ("aviso", "aviso_na_tela")):
+            patch = mock.patch(f"alerta_preco.__main__.{destino}", return_value=self.RESPOSTA)
+            setattr(self, nome, patch.start())
+            self.addCleanup(patch.stop)
+
+    def _lido(self) -> Estado:
+        estado = carregar_estado(self.estado)
+        assert estado is not None
+        return estado
+
+    def test_sem_email_nao_envia(self) -> None:
+        self._rodar("--semana", "2026-03-09")
+        self.enviar.assert_not_called()
+
+    def test_rodada_de_verdade_envia_com_os_extras_e_grava_o_estado(self) -> None:
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 0)
+        self.assertIn(self.RESPOSTA, saida)
+        vps, env, relatorio, extras = self.enviar.call_args.args
+        self.assertEqual((vps, env), ("u@s.exemplo", "/x"))
+        self.assertEqual(relatorio.assunto, "Preços: 1 subiu de 09/03 a 15/03 (R$ 80 a mais)")
+        self.assertEqual(extras, ("pessoa@exemplo.com",))
+        estado = self._lido()
+        self.assertEqual(estado.semanas_enviadas, ["2026-03-09"])
+        self.assertEqual(estado.ultimo_avisado, {"11111111|007|CX": 140.0})
+        self.assertIn("2" * 44, estado.notas_avaliadas)
+
+    def test_sem_semana_a_rodada_e_a_semana_passada(self) -> None:
+        self._rodar("--email")
+        self.assertEqual(self._lido().semanas_enviadas, ["2026-03-09"])
+
+    def test_teste_vai_sem_os_extras_marcado_e_sem_gravar_estado(self) -> None:
+        codigo, _ = self._rodar("--email", "--teste", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 0)
+        _, _, relatorio, extras = self.enviar.call_args.args
+        self.assertEqual(extras, ())
+        self.assertTrue(relatorio.assunto.startswith("[TESTE] "))
+        self.assertFalse(self.estado.exists())
+
+    def test_teste_ignora_a_semana_ja_enviada(self) -> None:
+        gravar_estado(registrar_envio(None, date(2026, 3, 9), set(), {}), self.estado)
+        self.assertEqual(self._rodar("--email", "--teste", "--semana", "2026-03-09")[0], 0)
+        self.enviar.assert_called_once()
+
+    def test_semana_repetida_recusa_com_zero_e_uma_linha(self) -> None:
+        gravar_estado(registrar_envio(None, date(2026, 3, 9), set(), {}), self.estado)
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 0)
+        self.enviar.assert_not_called()
+        self.assertIn("já foi enviada", saida)
+        self.assertEqual(len(saida.strip().splitlines()), 1)
+
+    def test_reenviar_manda_de_novo_com_os_mesmos_alertas(self) -> None:
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.enviar.reset_mock()
+        codigo, _ = self._rodar("--email", "--reenviar", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 0)
+        self.assertIn("1 subiu", self.enviar.call_args.args[2].assunto)
+        self.assertEqual(self._lido().semanas_enviadas, ["2026-03-09"])
+        self.assertEqual(self._lido().ultimo_avisado, {"11111111|007|CX": 140.0})
+
+    def test_falha_de_envio_nao_grava_estado_e_guarda_o_relatorio(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("Falha no envio: SMTPException")
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.assertFalse(self.estado.exists())
+        self.assertTrue((self.local / "2026-03-09.html").exists())
+        self.assertIn("SMTPException", saida)
+        self.assertIn("2026-03-09.txt", saida)
+        self.aviso.assert_called_once()
+
+    def test_a_proxima_tentativa_depois_da_falha_funciona(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("fora do ar")
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.enviar.side_effect = None
+        self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 0)
+        self.assertEqual(self._lido().semanas_enviadas, ["2026-03-09"])
+
+    def test_falha_do_banco_nao_envia_e_avisa_na_tela(self) -> None:
+        def falhar(_self: object) -> set[str]:
+            raise ErroDeFonte("Banco, tabela notas_fiscais: HTTP 500.")
+
+        with mock.patch.object(_BancoFalso, "canceladas", falhar):
+            codigo, _ = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_not_called()
+        self.aviso.assert_called_once()
+
+    def test_ensaio_com_falha_nao_mostra_aviso_na_tela(self) -> None:
+        def falhar(_self: object) -> set[str]:
+            raise ErroDeFonte("Banco, tabela notas_fiscais: HTTP 500.")
+
+        with mock.patch.object(_BancoFalso, "canceladas", falhar):
+            self.assertEqual(self._rodar("--semana", "2026-03-09")[0], 1)
+        self.aviso.assert_not_called()
+
+    def test_teste_ou_reenviar_sem_email_sao_recusados(self) -> None:
+        for opcao in ("--teste", "--reenviar"):
+            codigo, saida = self._rodar(opcao, "--semana", "2026-03-09")
+            self.assertEqual(codigo, 1)
+            self.assertIn("--email", saida)
+        self.enviar.assert_not_called()
 
 
 if __name__ == "__main__":
