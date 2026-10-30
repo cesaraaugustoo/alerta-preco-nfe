@@ -12,7 +12,9 @@ CHAVE_A = "1" * 44
 CHAVE_B = "2" * 44
 
 
-def _nota(chave: str = CHAVE_A, dh_emi: str = "2026-03-10T08:00:00-03:00", v_prod: str = "10.00", extra: str = "") -> str:
+def _nota(
+    chave: str = CHAVE_A, dh_emi: str = "2026-03-10T08:00:00-03:00", v_prod: str = "10.00", extra: str = ""
+) -> str:
     return (
         f'<NFe><infNFe Id="NFe{chave}"><ide><natOp>VENDA</natOp><nNF>7</nNF><dhEmi>{dh_emi}</dhEmi></ide>'
         f'<det nItem="1"><prod><cProd>X</cProd><xProd>PRODUTO</xProd><uCom>UN</uCom><qCom>1</qCom>'
