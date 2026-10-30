@@ -1,15 +1,16 @@
 import contextlib
 import io
 import json
+import smtplib
 import subprocess
 import tempfile
 import unittest
 from email.message import EmailMessage
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from unittest import mock
 
-from alerta_preco.envio import PROGRAMA_REMOTO, ErroDeEnvio, aviso_na_tela, enviar_email
+from alerta_preco.envio import PROGRAMA_REMOTO, Envio, ErroDeEnvio, aviso_na_tela, enviar_email
 from alerta_preco.modelos import Relatorio
 
 SENHA = "abcd efgh ijkl mnop"
@@ -26,6 +27,7 @@ class _SmtpFalso:
     enviadas: list[EmailMessage]
     logins: list[tuple[str, str]]
     erro: Exception | None = None
+    recusados: ClassVar[dict[str, tuple[int, bytes]]] = {}
 
     def __init__(self, *_: object, **__: object) -> None:
         pass
@@ -41,8 +43,9 @@ class _SmtpFalso:
             raise _SmtpFalso.erro
         _SmtpFalso.logins.append((usuario, senha))
 
-    def send_message(self, mensagem: EmailMessage) -> None:
+    def send_message(self, mensagem: EmailMessage) -> dict[str, tuple[int, bytes]]:
         _SmtpFalso.enviadas.append(mensagem)
+        return _SmtpFalso.recusados
 
 
 class TestProgramaRemoto(unittest.TestCase):
@@ -53,7 +56,7 @@ class TestProgramaRemoto(unittest.TestCase):
         self.addCleanup(pasta.cleanup)
         self.env = Path(pasta.name) / "segredos.env"
         self.env.write_text(ENV_COMPLETO, encoding="utf-8")
-        _SmtpFalso.enviadas, _SmtpFalso.logins, _SmtpFalso.erro = [], [], None
+        _SmtpFalso.enviadas, _SmtpFalso.logins, _SmtpFalso.erro, _SmtpFalso.recusados = [], [], None, {}
 
     def _executar(self, extras: list[str]) -> str:
         dados: dict[str, Any] = {
@@ -109,6 +112,17 @@ class TestProgramaRemoto(unittest.TestCase):
             self._executar(["pessoa@exemplo.com"])
         self.assertEqual(_SmtpFalso.enviadas, [])
 
+    def test_destinatario_recusado_nao_conta_e_e_nomeado(self) -> None:
+        _SmtpFalso.recusados = {"segunda@exemplo.com": (550, b"recusado")}
+        resposta = self._executar([])
+        self.assertEqual(resposta.splitlines(), ["E-mail enviado para 1 destinatario(s).", "Recusado: segunda@exemplo.com"])
+
+    def test_todos_recusados_e_falha_com_os_enderecos(self) -> None:
+        _SmtpFalso.erro = smtplib.SMTPRecipientsRefused({"primeira@exemplo.com": (550, b"recusado")})
+        with self.assertRaises(SystemExit) as saida:
+            self._executar([])
+        self.assertIn("primeira@exemplo.com", str(saida.exception.code))
+
     def test_falha_diz_so_o_tipo_do_erro(self) -> None:
         _SmtpFalso.erro = RuntimeError(f"recusada a senha {SENHA}")
         with self.assertRaises(SystemExit) as saida:
@@ -118,7 +132,7 @@ class TestProgramaRemoto(unittest.TestCase):
 
 
 class TestEnviarEmail(unittest.TestCase):
-    def _enviar(self, resultado: Any, extras: tuple[str, ...] = ()) -> tuple[str, mock.MagicMock]:
+    def _enviar(self, resultado: Any, extras: tuple[str, ...] = ()) -> tuple[Envio, mock.MagicMock]:
         with mock.patch("alerta_preco.envio.subprocess.run", side_effect=[resultado]) as run:
             return enviar_email("usuario@servidor.exemplo", "/srv/segredos.env", RELATORIO, extras), run
 
@@ -141,7 +155,12 @@ class TestEnviarEmail(unittest.TestCase):
         self.assertNotIn(RELATORIO.texto, " ".join(run.call_args.args[0]))
 
     def test_devolve_a_resposta_da_vps(self) -> None:
-        self.assertEqual(self._enviar(self._ok())[0], "E-mail enviado para 1 destinatario(s).")
+        self.assertEqual(self._enviar(self._ok())[0], Envio("E-mail enviado para 1 destinatario(s)."))
+
+    def test_devolve_os_recusados_separados_da_resposta(self) -> None:
+        saida = b"E-mail enviado para 1 destinatario(s).\nRecusado: pessoa@exemplo.com\n"
+        envio = self._enviar(subprocess.CompletedProcess([], 0, saida, b""))[0]
+        self.assertEqual(envio, Envio("E-mail enviado para 1 destinatario(s).", ("pessoa@exemplo.com",)))
 
     def test_erro_traz_so_a_ultima_linha_sem_conteudo_sensivel(self) -> None:
         falha = subprocess.CompletedProcess([], 1, b"", b"aviso qualquer\nFalha no envio: SMTPAuthenticationError\n")

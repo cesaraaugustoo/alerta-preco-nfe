@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import shutil
 import tempfile
 import unittest
 from datetime import date
@@ -8,10 +9,11 @@ from pathlib import Path
 from unittest import mock
 
 from alerta_preco.__main__ import main
-from alerta_preco.envio import ErroDeEnvio
+from alerta_preco.envio import TAMANHO_DO_AVISO, Envio, ErroDeEnvio
 from alerta_preco.estado import Estado, carregar_estado, gravar_estado, registrar_envio
 from alerta_preco.fontes import ErroDeFonte
 from alerta_preco.relatorio import montar_relatorio
+from alerta_preco.xml_nota import LeituraDaPasta, ler_pasta
 
 
 class TestConferirLeitura(unittest.TestCase):
@@ -99,6 +101,7 @@ class _Cenario(unittest.TestCase):
         self.pasta = Path(pasta.name)
         notas = self.pasta / "notas" / "2026"
         notas.mkdir(parents=True)
+        (self.pasta / "notas" / "2025").mkdir()  # a base volta 120 dias e passa pelo ano anterior
         (self.pasta / "negocio").mkdir()
         for nome in ("11-apelidos-fornecedores.md", "15-notas-fora-do-balanco.md", "01-empresa.md"):
             (self.pasta / "negocio" / nome).write_text("", encoding="utf-8")
@@ -249,9 +252,103 @@ class TestEmail(_CenarioDeEnsaio):
         config.write_text(config.read_text(encoding="utf-8").replace("destinatarios_extras = []", "destinatarios_extras = ['pessoa@exemplo.com']"), encoding="utf-8")
         self.estado = self.local / "estado.json"
         for nome, destino in (("enviar", "enviar_email"), ("aviso", "aviso_na_tela")):
-            patch = mock.patch(f"alerta_preco.__main__.{destino}", return_value=self.RESPOSTA)
+            patch = mock.patch(f"alerta_preco.__main__.{destino}", return_value=Envio(self.RESPOSTA))
             setattr(self, nome, patch.start())
             self.addCleanup(patch.stop)
+
+    def _nao_enviou_e_avisou(self, *trechos: str) -> None:
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_not_called()
+        self.assertFalse(self.estado.exists())
+        self.aviso.assert_called_once()
+        for trecho in trechos:
+            self.assertIn(trecho, saida)
+            self.assertIn(trecho, self.aviso.call_args.args[1])
+
+    def test_pasta_do_ano_ausente_nao_envia_e_avisa(self) -> None:
+        shutil.rmtree(self.pasta / "notas" / "2026")
+        self._nao_enviou_e_avisou("2026")
+
+    def test_ano_anterior_da_base_ausente_nao_envia(self) -> None:
+        with mock.patch("alerta_preco.__main__.ler_pasta", return_value=LeituraDaPasta([], 0, anos_ausentes=(2025,))):
+            self._nao_enviou_e_avisou("2025")
+
+    def test_ano_seguinte_ausente_na_virada_nao_e_falha(self) -> None:
+        reais = ler_pasta(self.pasta / "notas", "2026-03-01", "2026-03-20")
+        leitura = LeituraDaPasta(reais.notas, 0, anos_ausentes=(2027,))
+        with mock.patch("alerta_preco.__main__.ler_pasta", return_value=leitura):
+            self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 0)
+
+    def test_arquivo_que_nao_abre_nao_envia_e_avisa(self) -> None:
+        with mock.patch.object(Path, "read_bytes", side_effect=PermissionError("preso")):
+            self._nao_enviou_e_avisou("3 arquivos", "a.xml")
+
+    def test_semana_sem_nenhuma_nota_nao_envia_e_avisa(self) -> None:
+        codigo, saida = self._rodar("--email", "--semana", "2026-04-06")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_not_called()
+        self.assertIn("Nenhuma nota", saida)
+        self.assertIn("Nenhuma nota", self.aviso.call_args.args[1])
+
+    def test_erro_inesperado_avisa_sai_com_um_e_nao_mostra_o_conteudo(self) -> None:
+        with mock.patch("alerta_preco.__main__.regra.filtrar_notas", side_effect=RuntimeError("conteudo-sensivel")):
+            codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_not_called()
+        self.aviso.assert_called_once()
+        self.assertIn("RuntimeError", self.aviso.call_args.args[1])
+        self.assertIn("RuntimeError", saida)
+        self.assertNotIn("conteudo-sensivel", saida + self.aviso.call_args.args[1])
+
+    def test_xml_incompleto_aparece_e_nao_e_marcado_como_avaliado(self) -> None:
+        inteira = _xml("4" * 44, "2026-03-12", "340.00", "4")
+        (self.pasta / "notas" / "2026" / "d.xml").write_text(inteira[:-20], encoding="utf-8")
+        codigo, _ = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 0)
+        relatorio = self.enviar.call_args.args[2]
+        self.assertIn("1 arquivo de nota incompleto", relatorio.texto)
+        self.assertIn("d.xml", relatorio.texto)
+        self.assertNotIn("4" * 44, self._lido().notas_avaliadas)
+
+    def test_xml_consertado_entra_na_rodada_seguinte(self) -> None:
+        inteira = _xml("4" * 44, "2026-03-12", "340.00", "4")
+        arquivo = self.pasta / "notas" / "2026" / "d.xml"
+        arquivo.write_text(inteira[:-20], encoding="utf-8")
+        self._rodar("--email", "--semana", "2026-03-09")
+        arquivo.write_text(inteira, encoding="utf-8")
+        with mock.patch("alerta_preco.__main__._hoje", lambda: date(2026, 3, 24)):
+            self._rodar("--email", "--semana", "2026-03-16")
+        self.assertIn("4" * 44, self._lido().notas_avaliadas)
+
+    def test_estado_nao_gravado_diz_que_o_email_saiu_e_como_evitar_outro(self) -> None:
+        with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=PermissionError(13, "negado", "/x/estado.json")):
+            codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_called_once()
+        aviso = self.aviso.call_args.args[1]
+        for texto in (saida, aviso):
+            self.assertIn("já saiu", texto)
+            self.assertIn("Não rode de novo", texto)
+        self.assertNotIn("falhou", self.aviso.call_args.args[0])
+        self.assertLessEqual(len(aviso), TAMANHO_DO_AVISO)
+
+    def test_destinatario_recusado_avisa_o_endereco_e_grava_o_estado(self) -> None:
+        self.enviar.return_value = Envio(self.RESPOSTA, ("pessoa@exemplo.com",))
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.assertIn("pessoa@exemplo.com", saida)
+        self.assertIn("pessoa@exemplo.com", self.aviso.call_args.args[1])
+        self.assertEqual(self._lido().semanas_enviadas, ["2026-03-09"])
+
+    def test_recusado_e_estado_nao_gravado_cabem_no_mesmo_aviso(self) -> None:
+        self.enviar.return_value = Envio(self.RESPOSTA, ("pessoa-com-endereco-comprido@exemplo.com",))
+        with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=PermissionError("negado")):
+            self._rodar("--email", "--semana", "2026-03-09")
+        aviso = self.aviso.call_args.args[1]
+        self.assertLessEqual(len(aviso), TAMANHO_DO_AVISO)
+        self.assertIn("pessoa-com-endereco-comprido@exemplo.com", aviso)
+        self.assertIn("Não rode de novo", aviso)
 
     def _lido(self) -> Estado:
         estado = carregar_estado(self.estado)

@@ -25,10 +25,11 @@ from .estado import (
 from .fontes import Banco, ErroDeFonte, canceladas_no_espiao, ler_credenciais, ler_tabelas
 from .modelos import Relatorio
 from .relatorio import DadosDoRelatorio, brl, dia_e_mes, intervalo, montar_relatorio, numero
-from .xml_nota import conferir_leitura, ler_pasta
+from .xml_nota import ErroDeLeitura, LeituraDaPasta, conferir_leitura, ler_pasta
 
 DIFERENCAS_NA_TELA = 20
 _TITULO_DA_FALHA = "Alerta de preço: falhou"
+_TITULO_DO_ALERTA = "Alerta de preço: atenção"
 
 
 def _hoje() -> date:
@@ -62,8 +63,9 @@ def _simular(de_texto: str, ate_texto: str) -> int:
     semanas = regra.simular(regra.linhas_de_preco(filtro.validas, banco.regras()), semanas_entre(de, ate))
 
     print(
-        f"Notas únicas: {len(leitura.notas)}; ilegíveis: {leitura.ilegiveis}; na conta: {len(filtro.validas)}; "
-        f"sem item válido: {filtro.sem_item_valido}; canceladas: {filtro.canceladas}; "
+        f"Notas únicas: {len(leitura.notas)}; ilegíveis: {leitura.ilegiveis}; incompletas: {len(leitura.incompletos)}; "
+        f"que não abriram: {len(leitura.falhas)}; anos sem pasta: {len(leitura.anos_ausentes)}; "
+        f"na conta: {len(filtro.validas)}; sem item válido: {filtro.sem_item_valido}; canceladas: {filtro.canceladas}; "
         f"na tabela de fora: {filtro.fora_da_tabela}; boleto diferente: {len(filtro.fora_por_boleto)}."
     )
     for semana in semanas:
@@ -85,6 +87,19 @@ class _Rodada:
     avisados: dict[str, float]
 
 
+def _exigir_a_pasta_inteira(leitura: LeituraDaPasta, segunda: date) -> None:
+    """Sem ter lido tudo, o relatório poderia dizer "nenhuma alta" sem ser verdade: a rodada para antes dele."""
+    # No começo de janeiro, a pasta do ano novo ainda pode não existir: só o que vem depois da segunda é tolerado.
+    ausentes = [ano for ano in leitura.anos_ausentes if ano <= segunda.year]
+    if ausentes:
+        raise ErroDeLeitura(f"Falta a pasta do ano {ausentes[0]} nas notas. Nada foi enviado.")
+    if leitura.falhas:
+        quantos = f"{len(leitura.falhas)} arquivos não abriram" if len(leitura.falhas) > 1 else "1 arquivo não abriu"
+        raise ErroDeLeitura(
+            f"Na pasta de notas, {quantos} ({leitura.falhas[0]}): ela pode estar sincronizando. Nada foi enviado."
+        )
+
+
 def _montar_rodada(
     cfg: config.Config, segunda: date, hoje: date, teste: bool = False, reenviar: bool = False
 ) -> _Rodada:
@@ -100,8 +115,12 @@ def _montar_rodada(
         (segunda - timedelta(days=config.DIAS_DE_HISTORICO)).isoformat(),
         max(hoje, fim).isoformat(),
     )
+    _exigir_a_pasta_inteira(leitura, segunda)
     datas = {n.chave_acesso: n.data_emissao for n in leitura.notas}
     rodada = notas_da_rodada(datas.items(), segunda, estado)
+    if not rodada.chaves:
+        periodo = intervalo(segunda.isoformat(), fim.isoformat())
+        raise ErroDeLeitura(f"Nenhuma nota {periodo} na pasta: ela pode estar atrasada. Nada foi enviado.")
     inicio = min([segunda.isoformat(), *(datas[c] for c in rodada.atrasadas)])
     canceladas, falhas = canceladas_no_espiao(banco.configs_espiao(), inicio, fim.isoformat())
 
@@ -126,6 +145,7 @@ def _montar_rodada(
             lojas=tabelas.lojas,
             insumos=banco.insumos(),
             fornecedores_boleto_conhecido=cfg.fornecedores_boleto_conhecido,
+            notas_incompletas=leitura.incompletos,
             teste=teste,
         )
     )
@@ -170,13 +190,29 @@ def _enviar(semana: str | None, teste: bool, reenviar: bool) -> int:
     texto, _ = _salvar_previa(rodada.relatorio, segunda)
     extras = () if teste else cfg.destinatarios_extras
     try:
-        print(enviar_email(cfg.vps_ssh, cfg.arquivo_env_remoto, rodada.relatorio, extras))
+        envio = enviar_email(cfg.vps_ssh, cfg.arquivo_env_remoto, rodada.relatorio, extras)
     except ErroDeEnvio as e:
         print(f"O e-mail não saiu ({e}). O relatório está em {texto}.", file=sys.stderr)
         aviso_na_tela(_TITULO_DA_FALHA, f"O e-mail não saiu ({e}). O relatório está em {texto}.")
         return 1
+    print(envio.resposta)
+
+    avisos: list[str] = []
+    if envio.recusados:
+        avisos.append(f"O Gmail recusou {', '.join(envio.recusados)}: não recebeu.")
     if not teste:
-        gravar_estado(registrar_envio(carregar_estado(), segunda, rodada.chaves, rodada.avisados))
+        try:
+            gravar_estado(registrar_envio(carregar_estado(), segunda, rodada.chaves, rodada.avisados))
+        except (ErroDeEstado, OSError) as e:
+            # O aviso cabe na tela só até certo tamanho: o que evita um segundo e-mail vem antes do detalhe.
+            avisos.append(
+                f"O e-mail já saiu, mas o estado não foi gravado ({type(e).__name__}). "
+                "Não rode de novo nesta semana: mandaria um segundo e-mail."
+            )
+    if avisos:
+        print(" ".join(avisos), file=sys.stderr)
+        aviso_na_tela(_TITULO_DO_ALERTA, " ".join(avisos))
+        return 1
     return 0
 
 
@@ -204,11 +240,14 @@ def main(argumentos: list[str] | None = None) -> int:
         if args.email:
             return _enviar(args.semana, args.teste, args.reenviar)
         return _ensaio(args.semana)
-    except (config.ErroDeConfiguracao, ErroDeFonte, ErroDeEstado, OSError, ValueError) as e:
-        print(e, file=sys.stderr)
-        if args.email:
-            aviso_na_tela(_TITULO_DA_FALHA, str(e))
-        return 1
+    except (config.ErroDeConfiguracao, ErroDeFonte, ErroDeEstado, ErroDeLeitura, OSError, ValueError) as e:
+        mensagem = str(e)
+    except Exception as e:  # nenhum erro passa sem aviso; só o tipo, porque o texto dele pode trazer conteúdo
+        mensagem = f"Erro inesperado ({type(e).__name__}). Nada foi enviado."
+    print(mensagem, file=sys.stderr)
+    if args.email:
+        aviso_na_tela(_TITULO_DA_FALHA, mensagem)
+    return 1
 
 
 if __name__ == "__main__":

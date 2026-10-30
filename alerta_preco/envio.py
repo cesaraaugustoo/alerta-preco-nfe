@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 
 from .modelos import Relatorio
 
@@ -49,19 +50,30 @@ try:
     m.add_alternative(d['html'], subtype='html')
     with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=30) as s:
         s.login(usuario, senha)
-        s.send_message(m)
+        recusados = s.send_message(m)
+except smtplib.SMTPRecipientsRefused as e:
+    sys.exit('Falha no envio: todos os destinatarios recusados: ' + ', '.join(e.recipients))
 except Exception as e:
     sys.exit('Falha no envio: ' + type(e).__name__)
-print('E-mail enviado para %d destinatario(s).' % len(para))
+print('E-mail enviado para %d destinatario(s).' % (len(para) - len(recusados)))
+for e in recusados:
+    print('Recusado: ' + e.encode('ascii', 'replace').decode())
 """
+_PREFIXO_DO_RECUSADO = "Recusado: "
 
 
 class ErroDeEnvio(Exception):
     """O e-mail não saiu; a mensagem traz só o motivo."""
 
 
-def enviar_email(vps: str, arquivo_env_remoto: str, relatorio: Relatorio, extras: tuple[str, ...]) -> str:
-    """Manda o relatório pelo servidor `vps` (usuário@endereço). Devolve a linha que o servidor respondeu."""
+@dataclass(frozen=True, slots=True)
+class Envio:
+    resposta: str
+    recusados: tuple[str, ...] = ()
+
+
+def enviar_email(vps: str, arquivo_env_remoto: str, relatorio: Relatorio, extras: tuple[str, ...]) -> Envio:
+    """Manda o relatório pelo servidor `vps` (usuário@endereço). Devolve o que o servidor respondeu."""
     codificado = base64.b64encode(PROGRAMA_REMOTO.encode("utf-8")).decode("ascii")
     comando = [
         "ssh",
@@ -91,7 +103,9 @@ def enviar_email(vps: str, arquivo_env_remoto: str, relatorio: Relatorio, extras
         linhas = resultado.stderr.decode("utf-8", errors="replace").strip().splitlines()
         motivo = linhas[-1] if linhas else f"o ssh terminou com o código {resultado.returncode}"
         raise ErroDeEnvio(motivo[:TAMANHO_DO_MOTIVO])
-    return resultado.stdout.decode("utf-8", errors="replace").strip()
+    linhas = resultado.stdout.decode("utf-8", errors="replace").strip().splitlines()
+    recusados = tuple(x.removeprefix(_PREFIXO_DO_RECUSADO) for x in linhas if x.startswith(_PREFIXO_DO_RECUSADO))
+    return Envio(next((x for x in linhas if not x.startswith(_PREFIXO_DO_RECUSADO)), ""), recusados)
 
 
 _NOTIFICACAO = r"""
