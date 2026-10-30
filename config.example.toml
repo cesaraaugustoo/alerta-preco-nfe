@@ -1,0 +1,11 @@
+# Copie para ~/alerta-preco/config.toml e troque os valores. Esse arquivo nunca entra no repositório.
+
+[fontes]
+pasta_notas = 'D:\dados\notas-fiscais'
+pasta_negocio = 'D:\dados\tabelas'
+arquivo_env = 'D:\dados\segredos.env'
+
+[envio]
+vps_ssh = 'usuario@servidor.exemplo'
+arquivo_env_remoto = '/srv/alerta/.env'
+destinatarios_extras = ['pessoa@exemplo.com']
