@@ -72,6 +72,7 @@ def filtrar_notas(
         if soma_itens <= 0 or not BOLETO_MIN <= soma_boleto / soma_itens <= BOLETO_MAX:
             fora_por_boleto.append(
                 NotaForaDaConta(
+                    chave_acesso=nota.chave_acesso,
                     numero=nota.numero,
                     data_emissao=nota.data_emissao,
                     emitente_cnpj=nota.emitente_cnpj,
@@ -212,7 +213,8 @@ def avaliar_rodada(
                 fator=linha.fator,
                 emitente_cnpj=linha.emitente_cnpj,
                 emitente_nome=linha.emitente_nome,
-                destinatario_cnpj=linha.destinatario_cnpj,
+                destinatarios=tuple(dict.fromkeys(a.linha.destinatario_cnpj for a in grupo)),
+                outras_notas=len({a.linha.chave_acesso for a in grupo}) - 1,
                 chegou_depois=linha.chave_acesso in atrasadas,
             )
         )

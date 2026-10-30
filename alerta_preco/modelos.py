@@ -40,6 +40,7 @@ class RegraProduto:
 class NotaForaDaConta:
     """Nota cujo boleto não fecha com os itens: o preço rateado seria falso."""
 
+    chave_acesso: str
     numero: str
     data_emissao: str
     emitente_cnpj: str | None
@@ -85,5 +86,13 @@ class Alerta:
     fator: float
     emitente_cnpj: str | None
     emitente_nome: str | None
-    destinatario_cnpj: str | None
+    destinatarios: tuple[str | None, ...]
+    outras_notas: int
     chegou_depois: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Relatorio:
+    assunto: str
+    texto: str
+    html: str

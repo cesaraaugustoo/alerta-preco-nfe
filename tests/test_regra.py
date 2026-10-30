@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from alerta_preco.modelos import Item, LinhaDePreco, Nota, RegraProduto
 from alerta_preco.regra import (
@@ -92,6 +93,7 @@ class TestFiltros(unittest.TestCase):
     def test_nao_entrou_traz_itens_e_boleto(self) -> None:
         f = filtrar_notas([_nota("a", "2026-03-02", _item("1", 52, valor_total=100))], set(), set(), {})
         self.assertEqual((f.fora_por_boleto[0].soma_itens, f.fora_por_boleto[0].soma_boleto), (100, 52))
+        self.assertEqual(f.fora_por_boleto[0].chave_acesso, "a")
 
     def test_itens_com_total_zero_nao_quebram_a_conta(self) -> None:
         nota = _nota("a", "2026-03-02", _item("1", 10, valor_total=0), numero="9")
@@ -242,6 +244,19 @@ class TestAvaliacao(unittest.TestCase):
         self.assertEqual((alertas[0].preco, alertas[0].base), (126, 105))
         self.assertEqual(alertas[0].numero_nota, "37")
         self.assertEqual(alertas[0].quantidade, 2)
+        self.assertEqual(alertas[0].outras_notas, 1)
+
+    def test_agrupamento_guarda_as_lojas_sem_repetir(self) -> None:
+        def nota(chave: str, data: str, preco: float, destino: str) -> Nota:
+            return replace(_nota(chave, data, _item("1", preco, 1)), destinatario_cnpj=destino)
+
+        linhas = _linhas(
+            nota("a", "2026-03-02", 100, "X"),
+            nota("b", "2026-03-09", 150, "Y"),
+            nota("c", "2026-03-10", 150, "X"),
+            nota("d", "2026-03-11", 150, "Y"),
+        )
+        self.assertEqual(avaliar_rodada(linhas, {"b", "c", "d"}, {}).alertas[0].destinatarios, ("Y", "X"))
 
     def test_alertas_do_maior_valor_para_o_menor(self) -> None:
         linhas = _linhas(
