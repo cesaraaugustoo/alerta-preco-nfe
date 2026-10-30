@@ -174,14 +174,22 @@ def avaliar_rodada(
 
     altas: dict[str, list[_Alta]] = defaultdict(list)
     sem_base: set[str] = set()
+    # O produto que estreia na rodada mantém a base da primeira nota: comparada com a estreia, a segunda
+    # nota daria alta zero, e o relatório contaria só parte do que a troca custou.
+    estreias: dict[str, float] = {}
     for linha in linhas:
         if linha.chave_acesso not in chaves:
             continue
-        achada = _base(linha, por_produto, por_materia)
-        if achada is None:
-            sem_base.add(linha.produto)
-            continue
-        base, como = achada
+        if linha.produto in estreias:
+            base, como = estreias[linha.produto], TROCOU
+        else:
+            achada = _base(linha, por_produto, por_materia)
+            if achada is None:
+                sem_base.add(linha.produto)
+                continue
+            base, como = achada
+            if como == TROCOU:
+                estreias[linha.produto] = base
         alta = linha.preco / base - 1
         if alta > 0:
             altas[linha.produto].append(_Alta(linha, base, alta, como))

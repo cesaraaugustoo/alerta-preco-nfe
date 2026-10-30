@@ -194,6 +194,53 @@ class TestAvaliacao(unittest.TestCase):
         avaliacao = avaliar_rodada(linhas_de_preco([_nota("a", "2026-03-02", _item("1", 74))], regras), {"a"}, {})
         self.assertEqual(avaliacao.produtos_sem_base, 1)
 
+    def _troca(self, *notas: Nota) -> list[LinhaDePreco]:
+        regras = {f"{RAIZ_A}|1": RegraProduto("insumo", 1.0), f"{RAIZ_B}|9": RegraProduto("insumo", 1.0)}
+        return linhas_de_preco([_nota("a", "2026-03-02", _item("1", 100), raiz=RAIZ_A), *notas], regras)
+
+    def test_produto_que_estreia_usa_a_mesma_base_em_todas_as_notas_da_rodada(self) -> None:
+        linhas = self._troca(
+            _nota("b", "2026-03-09", _item("9", 131, 13), raiz=RAIZ_B),
+            _nota("c", "2026-03-11", _item("9", 131, 39), raiz=RAIZ_B),
+        )
+        alerta = avaliar_rodada(linhas, {"b", "c"}, {}).alertas[0]
+        self.assertEqual(alerta.como, "trocou")
+        self.assertEqual(alerta.base, 100)
+        self.assertEqual(alerta.a_mais, 1612)  # 52 caixas a mais 31; antes, só as 13 da primeira nota contavam
+        self.assertEqual(alerta.quantidade, 52)
+        self.assertEqual(alerta.outras_notas, 1)
+
+    def test_nota_seguinte_da_estreia_com_outro_preco_mantem_a_base(self) -> None:
+        linhas = self._troca(
+            _nota("b", "2026-03-09", _item("9", 110, 10), raiz=RAIZ_B),
+            _nota("c", "2026-03-11", _item("9", 140, 10), raiz=RAIZ_B),
+        )
+        alerta = avaliar_rodada(linhas, {"b", "c"}, {}).alertas[0]
+        self.assertEqual((alerta.base, alerta.preco), (100, 140))
+        self.assertEqual(alerta.a_mais, 500)
+
+    def test_nota_da_estreia_abaixo_da_base_nao_soma(self) -> None:
+        linhas = self._troca(
+            _nota("b", "2026-03-09", _item("9", 125, 10), raiz=RAIZ_B),
+            _nota("c", "2026-03-11", _item("9", 94, 53), raiz=RAIZ_B),
+        )
+        self.assertEqual(avaliar_rodada(linhas, {"b", "c"}, {}).alertas[0].a_mais, 250)
+
+    def test_notas_pequenas_da_estreia_somadas_passam_do_minimo(self) -> None:
+        linhas = self._troca(
+            _nota("b", "2026-03-09", _item("9", 110, 1), raiz=RAIZ_B),
+            _nota("c", "2026-03-11", _item("9", 110, 1), raiz=RAIZ_B),
+        )
+        self.assertEqual(avaliar_rodada(linhas, {"b", "c"}, {}).alertas[0].a_mais, 20)
+
+    def test_na_rodada_seguinte_a_troca_vira_mesmo_produto(self) -> None:
+        linhas = self._troca(
+            _nota("b", "2026-03-09", _item("9", 131, 13), raiz=RAIZ_B),
+            _nota("c", "2026-03-16", _item("9", 150, 2), raiz=RAIZ_B),
+        )
+        alerta = avaliar_rodada(linhas, {"c"}, {}).alertas[0]
+        self.assertEqual((alerta.como, alerta.base), ("mesmo produto", 131))
+
     def test_produto_com_historico_nao_olha_a_materia_prima(self) -> None:
         regras = {f"{RAIZ_A}|1": RegraProduto("insumo", 1.0), f"{RAIZ_B}|9": RegraProduto("insumo", 1.0)}
         linhas = linhas_de_preco(
