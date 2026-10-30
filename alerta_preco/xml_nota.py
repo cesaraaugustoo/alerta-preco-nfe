@@ -16,6 +16,11 @@ from typing import Any
 
 from .modelos import Item, Nota
 
+
+class ErroDeLeitura(Exception):
+    """A pasta de notas não foi lida por inteiro; a mensagem diz o que faltou."""
+
+
 # Natureza da operação que não é compra: sem cobrança, o item não tem valor.
 TERMOS_NAO_COMERCIAL = ("BONIFICA", "BRINDE", "REMESSA", "DOACAO", "DEMONSTRA", "AMOSTRA", "DEVOL")
 # Diferença tolerada entre as duas leituras, por valor.
@@ -168,39 +173,76 @@ def como_dict(nota: Nota) -> dict[str, Any]:
     }
 
 
-def arquivos_xml(raiz: Path, anos: Iterable[int] | None = None) -> list[Path]:
-    """Os `*.xml` em qualquer nível, sem a pasta TESTE, em ordem. Com `anos`, só dentro de `<raiz>/<ano>`."""
+def arquivos_xml(raiz: Path, anos: Iterable[int] | None = None, erros: list[str] | None = None) -> list[Path]:
+    """Os `*.xml` em qualquer nível, sem a pasta TESTE, em ordem. Com `anos`, só dentro de `<raiz>/<ano>`.
+
+    Sem `erros`, a pasta que não abre é ignorada, como faz o `os.walk`; com a lista, o nome dela é anotado ali.
+    """
     inicios = [raiz] if anos is None else [raiz / str(ano) for ano in anos]
+
+    def anotar(erro: OSError) -> None:
+        if erros is not None:
+            erros.append(Path(erro.filename or "").name)
+
     achados: list[Path] = []
     for inicio in inicios:
-        for pasta, subpastas, arquivos in os.walk(inicio):
+        for pasta, subpastas, arquivos in os.walk(inicio, onerror=anotar):
             subpastas[:] = [s for s in subpastas if s.upper() != "TESTE"]
             achados += [Path(pasta, a) for a in arquivos if a.lower().endswith(".xml")]
     return sorted(achados)
+
+
+def nota_incompleta(xml: str) -> bool:
+    """Arquivo de NF-e cortado antes do fim. O leitor não percebe: sem os totais, a nota pareceria uma bonificação."""
+    if "<infNFe" not in xml:
+        return False
+    return "</infNFe>" not in xml or "</NFe>" not in xml or ("<nfeProc" in xml and "</nfeProc>" not in xml)
 
 
 @dataclass(frozen=True, slots=True)
 class LeituraDaPasta:
     notas: list[Nota]
     ilegiveis: int
+    incompletos: tuple[str, ...] = ()
+    falhas: tuple[str, ...] = ()
+    anos_ausentes: tuple[int, ...] = ()
 
 
 def ler_pasta(raiz: Path, de: str, ate: str) -> LeituraDaPasta:
-    """As notas emitidas entre `de` e `ate` (AAAA-MM-DD); a mesma chave conta uma vez."""
+    """As notas emitidas entre `de` e `ate` (AAAA-MM-DD); a mesma chave conta uma vez.
+
+    O que não é NF-e só é contado. Quem decide o que fazer com as falhas e as pastas de ano ausentes é quem chama.
+    """
     if not raiz.is_dir():
         raise FileNotFoundError(f"Pasta das notas não encontrada: {raiz}")
+    anos = range(int(de[:4]), int(ate[:4]) + 1)
+    ausentes = tuple(ano for ano in anos if not (raiz / str(ano)).is_dir())
     por_chave: dict[str, Nota] = {}
+    cortadas: list[tuple[str, Nota | None]] = []
+    falhas: list[str] = []
     ilegiveis = 0
-    for arquivo in arquivos_xml(raiz, range(int(de[:4]), int(ate[:4]) + 1)):
+    for arquivo in arquivos_xml(raiz, [ano for ano in anos if ano not in ausentes], falhas):
         try:
-            nota = ler_arquivo(arquivo)
+            xml = arquivo.read_bytes().decode("utf-8", errors="replace")
         except OSError:
-            nota = None
-        if nota is None:
+            falhas.append(arquivo.name)
+            continue
+        nota = ler_nota_xml(xml)
+        if nota_incompleta(xml):
+            cortadas.append((arquivo.name, nota))
+        elif nota is None:
             ilegiveis += 1
         elif de <= nota.data_emissao <= ate:
             por_chave.setdefault(nota.chave_acesso, nota)
-    return LeituraDaPasta(list(por_chave.values()), ilegiveis)
+    # Sem data não dá para saber o período; com data fora dele, ou com uma cópia inteira, o arquivo não faz falta.
+    incompletos = tuple(
+        nome
+        for nome, nota in cortadas
+        if nota is None
+        or not nota.data_emissao
+        or (de <= nota.data_emissao <= ate and nota.chave_acesso not in por_chave)
+    )
+    return LeituraDaPasta(list(por_chave.values()), ilegiveis, incompletos, tuple(falhas), ausentes)
 
 
 def _diferencas(esperado: object, obtido: object, caminho: str) -> Iterator[str]:

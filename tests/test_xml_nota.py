@@ -1,10 +1,19 @@
 import json
 import tempfile
 import unittest
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest import mock
 
-from alerta_preco.xml_nota import arquivos_xml, como_dict, conferir_leitura, ler_arquivo, ler_nota_xml, ler_pasta
+from alerta_preco.xml_nota import (
+    arquivos_xml,
+    como_dict,
+    conferir_leitura,
+    ler_arquivo,
+    ler_nota_xml,
+    ler_pasta,
+    nota_incompleta,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 ESPERADO = json.loads((FIXTURES / "esperado.json").read_text(encoding="utf-8"))
@@ -129,12 +138,61 @@ class TestPasta(unittest.TestCase):
         self.assertEqual(len(leitura.notas), 1)
         self.assertEqual(leitura.ilegiveis, 1)
 
-    def test_arquivo_que_nao_abre_e_contado(self) -> None:
+    def test_arquivo_que_nao_abre_vira_falha_e_nao_nota_ilegivel(self) -> None:
         self._gravar("2026/a.xml", _nota(CHAVE_A))
         with mock.patch.object(Path, "read_bytes", side_effect=OSError("preso")):
             leitura = ler_pasta(self.raiz, "2026-03-01", "2026-03-20")
         self.assertEqual(leitura.notas, [])
-        self.assertEqual(leitura.ilegiveis, 1)
+        self.assertEqual(leitura.ilegiveis, 0)
+        self.assertEqual(leitura.falhas, ("a.xml",))
+
+    def test_subpasta_que_nao_abre_vira_falha(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A))
+
+        def varrer(_inicio: Path, onerror: Callable[[OSError], None]) -> Iterator[tuple[str, list[str], list[str]]]:
+            onerror(PermissionError(13, "negado", "MES"))
+            return iter(())
+
+        with mock.patch("alerta_preco.xml_nota.os.walk", varrer):
+            leitura = ler_pasta(self.raiz, "2026-03-01", "2026-03-20")
+        self.assertEqual(leitura.falhas, ("MES",))
+
+    def test_ano_que_falta_e_informado(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A))
+        leitura = ler_pasta(self.raiz, "2025-12-29", "2027-01-04")
+        self.assertEqual(leitura.anos_ausentes, (2025, 2027))
+        self.assertEqual(leitura.falhas, ())
+        self.assertEqual(len(leitura.notas), 1)
+
+    def test_xml_cortado_e_contado_e_nao_vira_nota(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A)[:-20])
+        leitura = ler_pasta(self.raiz, "2026-03-01", "2026-03-20")
+        self.assertEqual(leitura.notas, [])
+        self.assertEqual(leitura.incompletos, ("a.xml",))
+        self.assertEqual(leitura.ilegiveis, 0)
+
+    def test_xml_cortado_antes_da_data_tambem_e_contado(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A).split("<dhEmi>")[0])
+        self.assertEqual(ler_pasta(self.raiz, "2026-03-01", "2026-03-20").incompletos, ("a.xml",))
+
+    def test_xml_cortado_fora_do_periodo_nao_e_contado(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A, "2026-01-05T08:00:00-03:00")[:-20])
+        self.assertEqual(ler_pasta(self.raiz, "2026-03-01", "2026-03-20").incompletos, ())
+
+    def test_copia_inteira_vence_a_cortada(self) -> None:
+        self._gravar("2026/a.xml", _nota(CHAVE_A)[:-20])
+        self._gravar("2026/b.xml", _nota(CHAVE_A))
+        leitura = ler_pasta(self.raiz, "2026-03-01", "2026-03-20")
+        self.assertEqual([i.valor_total for n in leitura.notas for i in n.itens], [10.0])
+        self.assertEqual(leitura.incompletos, ())
+
+    def test_nota_incompleta(self) -> None:
+        inteira = _nota(CHAVE_A)
+        self.assertFalse(nota_incompleta(inteira))
+        self.assertFalse(nota_incompleta(f"<nfeProc>{inteira}</nfeProc>"))
+        self.assertFalse(nota_incompleta("<evento/>"))
+        self.assertTrue(nota_incompleta(inteira[:-20]))
+        self.assertTrue(nota_incompleta(f"<nfeProc>{inteira}"))
 
     def test_pasta_ausente_interrompe(self) -> None:
         with self.assertRaisesRegex(FileNotFoundError, "nao-existe"):
