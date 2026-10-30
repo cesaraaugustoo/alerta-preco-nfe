@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+config.toml
+*.local.*
