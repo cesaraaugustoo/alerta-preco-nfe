@@ -120,6 +120,7 @@ def _montar_rodada(segunda: date, hoje: date, teste: bool = False, reenviar: boo
             apelidos=tabelas.apelidos,
             lojas=tabelas.lojas,
             insumos=banco.insumos(),
+            fornecedores_boleto_conhecido=cfg.fornecedores_boleto_conhecido,
             teste=teste,
         )
     )

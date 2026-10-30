@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from .modelos import Alerta, NotaForaDaConta, Relatorio
-from .regra import TROCOU
+from .regra import TROCOU, chave_apelido
 
 DIAS_ATE_O_AVISO_DE_ATRASO = 3
 AVISO_DE_ATRASO = "a pasta de notas pode estar atrasada"
@@ -65,6 +65,7 @@ class DadosDoRelatorio:
     apelidos: Mapping[str, str]
     lojas: Mapping[str, str]
     insumos: Mapping[str, tuple[str, str]]
+    fornecedores_boleto_conhecido: Sequence[str] = ()
     teste: bool = False
 
 
@@ -117,11 +118,17 @@ def _cartao_trocou(alerta: Alerta, dados: DadosDoRelatorio) -> _Cartao:
     return _Cartao(_do_xml(alerta.descricao), _subtitulo(alerta, dados), linhas)
 
 
+def _boleto_conhecido(nota: NotaForaDaConta, dados: DadosDoRelatorio) -> bool:
+    conhecidos = {chave_apelido(nome) for nome in dados.fornecedores_boleto_conhecido}
+    return chave_apelido(_fornecedor(nota.emitente_cnpj, nota.emitente_nome, dados.apelidos)) in conhecidos
+
+
 def _nao_entrou(dados: DadosDoRelatorio) -> tuple[str, ...]:
     linhas = [
         f"Nota com boleto diferente dos itens: {_fornecedor(n.emitente_cnpj, n.emitente_nome, dados.apelidos)} "
         f"{n.numero}, itens {brl(n.soma_itens)}, boleto {brl(n.soma_boleto)}."
         for n in dados.fora_por_boleto
+        if not _boleto_conhecido(n, dados)
     ]
     if dados.falhas_de_cancelamento:
         consultas = _plural(dados.falhas_de_cancelamento, "consulta", "consultas")
@@ -136,6 +143,9 @@ def _rodape(dados: DadosDoRelatorio) -> str:
         f"{_plural(dados.notas_na_rodada, 'nota', 'notas')}, "
         f"{_plural(dados.produtos_sem_base, 'produto sem base', 'produtos sem base')}."
     )
+    conhecidas = sum(_boleto_conhecido(n, dados) for n in dados.fora_por_boleto)
+    if conhecidas:
+        contagem += f" {_plural(conhecidas, 'nota', 'notas')} de fornecedor com boleto conhecido fora do cálculo."
     if dados.nota_mais_nova is None:
         return f"Não li nenhuma nota: {AVISO_DE_ATRASO}. {contagem} {COBERTURA}"
     leitura = f"Li até a nota de {dia_e_mes(dados.nota_mais_nova)}."
@@ -186,25 +196,43 @@ def _em_html(resumo: str, secoes: Sequence[_Secao], rodape: str) -> str:
     )
 
 
-def montar_relatorio(dados: DadosDoRelatorio) -> Relatorio:
-    periodo = intervalo(dados.de, dados.ate)
-    alertas = sorted(dados.alertas, key=lambda a: -a.a_mais)
-    quantos = len(alertas)
-    total = sum(a.a_mais for a in alertas)
+def _assunto_e_resumo(altas: Sequence[Alerta], trocas: Sequence[Alerta], periodo: str) -> tuple[str, str]:
+    """A troca é aviso, não aumento: o valor dela nunca entra no total de altas."""
+    subiu = "subiu" if len(altas) == 1 else "subiram"
+    trocou = "trocou" if len(trocas) == 1 else "trocaram"
+    total_altas, total_trocas = sum(a.a_mais for a in altas), sum(a.a_mais for a in trocas)
+    if altas and trocas:
+        rotulo = "troca" if len(trocas) == 1 else "trocas"
+        return (
+            f"Preços: {len(altas)} {subiu} e {len(trocas)} {trocou} {periodo} "
+            f"({brl(total_altas, 0)} a mais; {rotulo}, {brl(total_trocas, 0)})",
+            f"{_plural(len(altas), 'item', 'itens')} {subiu}, {brl(total_altas)} a mais, "
+            f"e {len(trocas)} {trocou}, {brl(total_trocas)}, {periodo}.",
+        )
+    if altas:
+        return (
+            f"Preços: {len(altas)} {subiu} {periodo} ({brl(total_altas, 0)} a mais)",
+            f"{_plural(len(altas), 'item', 'itens')} {subiu}, {brl(total_altas)} a mais, {periodo}.",
+        )
+    if trocas:
+        return (
+            f"Preços: {len(trocas)} {trocou} {periodo} ({brl(total_trocas, 0)})",
+            f"{_plural(len(trocas), 'item', 'itens')} {trocou}, {brl(total_trocas)}, {periodo}.",
+        )
+    return f"Preços: nenhuma alta {periodo}", f"Nenhum preço subiu {periodo}."
 
-    if quantos:
-        verbo = "subiu" if quantos == 1 else "subiram"
-        assunto = f"Preços: {quantos} {verbo} {periodo} ({brl(total, 0)} a mais)"
-        resumo = f"{_plural(quantos, 'item', 'itens')} {verbo}, {brl(total)} a mais, {periodo}."
-    else:
-        assunto = f"Preços: nenhuma alta {periodo}"
-        resumo = f"Nenhum preço subiu {periodo}."
+
+def montar_relatorio(dados: DadosDoRelatorio) -> Relatorio:
+    alertas = sorted(dados.alertas, key=lambda a: -a.a_mais)
+    altas = [a for a in alertas if a.como != TROCOU]
+    trocas = [a for a in alertas if a.como == TROCOU]
+    assunto, resumo = _assunto_e_resumo(altas, trocas, intervalo(dados.de, dados.ate))
     if dados.teste:
         assunto = f"[TESTE] {assunto}"
 
     secoes: list[_Secao] = []
-    subiu = tuple(_cartao_subiu(a, dados) for a in alertas if a.como != TROCOU)
-    trocou = tuple(_cartao_trocou(a, dados) for a in alertas if a.como == TROCOU)
+    subiu = tuple(_cartao_subiu(a, dados) for a in altas)
+    trocou = tuple(_cartao_trocou(a, dados) for a in trocas)
     nao_entrou = _nao_entrou(dados)
     if subiu:
         secoes.append(_Secao("Subiu", cartoes=subiu))

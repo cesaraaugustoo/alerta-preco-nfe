@@ -1,5 +1,9 @@
 # Copie para ~/alerta-preco/config.toml e troque os valores. Esse arquivo nunca entra no repositório.
 
+# Fornecedores cujo boleto difere dos itens de forma permanente. A nota continua fora do cálculo de preço,
+# mas sai de "Não entrou na conta" e vira só uma contagem no rodapé. Use o nome como aparece no relatório.
+fornecedores_boleto_conhecido = ["FORNECEDOR B"]
+
 [fontes]
 pasta_notas = 'D:\dados\notas-fiscais'
 pasta_negocio = 'D:\dados\tabelas'

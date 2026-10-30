@@ -80,6 +80,24 @@ class TestConfig(unittest.TestCase):
         config = ler_config(RAIZ / "config.example.toml")
         self.assertTrue(config.vps_ssh)
         self.assertTrue(config.destinatarios_extras)
+        self.assertEqual(config.fornecedores_boleto_conhecido, ("FORNECEDOR B",))
+
+    def test_fornecedores_com_boleto_conhecido(self) -> None:
+        self._escrever()
+        texto = self.arquivo.read_text(encoding="utf-8")
+        self.arquivo.write_text(f"fornecedores_boleto_conhecido = ['FORNECEDOR B']\n{texto}", encoding="utf-8")
+        self.assertEqual(ler_config(self.arquivo).fornecedores_boleto_conhecido, ("FORNECEDOR B",))
+
+    def test_sem_a_lista_nenhum_fornecedor_e_conhecido(self) -> None:
+        self._escrever()
+        self.assertEqual(ler_config(self.arquivo).fornecedores_boleto_conhecido, ())
+
+    def test_lista_de_fornecedores_invalida(self) -> None:
+        self._escrever()
+        texto = self.arquivo.read_text(encoding="utf-8")
+        self.arquivo.write_text(f"fornecedores_boleto_conhecido = 'FORNECEDOR B'\n{texto}", encoding="utf-8")
+        with self.assertRaisesRegex(ErroDeConfiguracao, "fornecedores_boleto_conhecido"):
+            ler_config(self.arquivo)
 
 
 if __name__ == "__main__":

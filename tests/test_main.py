@@ -10,6 +10,7 @@ from unittest import mock
 from alerta_preco.__main__ import main
 from alerta_preco.estado import Estado, gravar_estado, registrar_envio
 from alerta_preco.fontes import ErroDeFonte
+from alerta_preco.relatorio import montar_relatorio
 
 
 class TestConferirLeitura(unittest.TestCase):
@@ -220,6 +221,13 @@ class TestEnsaio(TestSimular):
         gravar_estado(Estado(semanas_enviadas=["2026-03-02"], ultimo_avisado={"11111111|007|CX": 140.0}), self.local / "estado.json")
         _, saida = self._rodar("--semana", "2026-03-09")
         self.assertIn("nenhuma alta", saida)
+
+    def test_lista_da_configuracao_chega_ao_relatorio(self) -> None:
+        config = self.pasta / "config.toml"
+        config.write_text("fornecedores_boleto_conhecido = ['FORNECEDOR B']\n" + config.read_text(encoding="utf-8"), encoding="utf-8")
+        with mock.patch("alerta_preco.__main__.montar_relatorio", wraps=montar_relatorio) as montar:
+            self._rodar("--semana", "2026-03-09")
+        self.assertEqual(montar.call_args.args[0].fornecedores_boleto_conhecido, ("FORNECEDOR B",))
 
     def test_estado_corrompido_sai_com_um(self) -> None:
         self.local.mkdir()

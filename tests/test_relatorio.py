@@ -52,6 +52,11 @@ def _dados(**troca: object) -> DadosDoRelatorio:
     return replace(padrao, **troca)  # type: ignore[arg-type]
 
 
+def _troca(**troca: object) -> Alerta:
+    padrao: dict[str, object] = {"produto": "p9", "como": "trocou", "materia_prima": "7", "fator": 1.0, "a_mais": 613.37}
+    return _alerta(**(padrao | troca))
+
+
 class TestFormato(unittest.TestCase):
     def test_moeda(self) -> None:
         self.assertEqual(brl(1234.56), "R$ 1.234,56")
@@ -72,6 +77,21 @@ class TestAssunto(unittest.TestCase):
 
     def test_milhar_no_assunto(self) -> None:
         self.assertIn("(R$ 1.235 a mais)", montar_relatorio(_dados(alertas=(_alerta(a_mais=1234.6),))).assunto)
+
+    def test_alta_e_troca_separadas(self) -> None:
+        dados = _dados(alertas=(_alerta(a_mais=39.25), _troca()))
+        self.assertEqual(montar_relatorio(dados).assunto, "Preços: 1 subiu e 1 trocou de 09/03 a 15/03 (R$ 39 a mais; troca, R$ 613)")
+
+    def test_varias_altas_e_varias_trocas(self) -> None:
+        dados = _dados(alertas=(_alerta(a_mais=10), _alerta(produto="p2", a_mais=39), _troca(a_mais=100), _troca(produto="p8", a_mais=250)))
+        self.assertEqual(montar_relatorio(dados).assunto, "Preços: 2 subiram e 2 trocaram de 09/03 a 15/03 (R$ 49 a mais; trocas, R$ 350)")
+
+    def test_so_troca(self) -> None:
+        self.assertEqual(montar_relatorio(_dados(alertas=(_troca(),))).assunto, "Preços: 1 trocou de 09/03 a 15/03 (R$ 613)")
+
+    def test_varias_trocas(self) -> None:
+        dados = _dados(alertas=(_troca(a_mais=100), _troca(produto="p8", a_mais=250)))
+        self.assertEqual(montar_relatorio(dados).assunto, "Preços: 2 trocaram de 09/03 a 15/03 (R$ 350)")
 
     def test_sem_alta(self) -> None:
         self.assertEqual(montar_relatorio(_dados()).assunto, "Preços: nenhuma alta de 09/03 a 15/03")
@@ -100,6 +120,17 @@ class TestCorpo(unittest.TestCase):
     def test_resumo_com_itens_valor_e_periodo(self) -> None:
         dados = _dados(alertas=(_alerta(a_mais=1000.5), _alerta(produto="p2", a_mais=234.06)))
         self._em_ambos(dados, "2 itens subiram, R$ 1.234,56 a mais, de 09/03 a 15/03.")
+
+    def test_primeira_linha_separa_alta_e_troca(self) -> None:
+        self._em_ambos(_dados(alertas=(_alerta(a_mais=39.25), _troca())), "1 item subiu, R$ 39,25 a mais, e 1 trocou, R$ 613,37, de 09/03 a 15/03.")
+
+    def test_primeira_linha_com_varias_de_cada(self) -> None:
+        dados = _dados(alertas=(_alerta(a_mais=10), _alerta(produto="p2", a_mais=39), _troca(a_mais=100), _troca(produto="p8", a_mais=250)))
+        self._em_ambos(dados, "2 itens subiram, R$ 49,00 a mais, e 2 trocaram, R$ 350,00, de 09/03 a 15/03.")
+
+    def test_primeira_linha_so_com_troca(self) -> None:
+        self._em_ambos(_dados(alertas=(_troca(),)), "1 item trocou, R$ 613,37, de 09/03 a 15/03.")
+        self._em_ambos(_dados(alertas=(_troca(a_mais=100), _troca(produto="p8", a_mais=250))), "2 itens trocaram, R$ 350,00, de 09/03 a 15/03.")
 
     def test_item_que_subiu_traz_todos_os_fatos(self) -> None:
         self._em_ambos(
@@ -175,6 +206,41 @@ class TestCorpo(unittest.TestCase):
         fora = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "FORNECEDOR A LTDA", 275.0, 194.73)
         self._em_ambos(_dados(fora_por_boleto=(fora,)), "Fornecedor A", "55", "itens R$ 275,00", "boleto R$ 194,73")
         self.assertIn("NÃO ENTROU NA CONTA", montar_relatorio(_dados(fora_por_boleto=(fora,))).texto)
+
+    def test_fornecedor_de_boleto_conhecido_vira_contagem_no_rodape(self) -> None:
+        conhecida = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "RAZAO", 275.0, 194.73)
+        dados = _dados(fora_por_boleto=(conhecida,), fornecedores_boleto_conhecido=("fornecedor a",))
+        self._em_ambos(dados, "1 nota de fornecedor com boleto conhecido fora do cálculo.")
+        for corpo in self._ambos(dados):
+            self.assertNotIn("itens R$ 275,00", corpo)
+            self.assertNotIn("boleto diferente", corpo)
+        self.assertNotIn("NÃO ENTROU NA CONTA", montar_relatorio(dados).texto)
+
+    def test_varias_notas_de_boleto_conhecido_no_plural(self) -> None:
+        conhecida = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "RAZAO", 275.0, 194.73)
+        dados = _dados(fora_por_boleto=(conhecida, replace(conhecida, numero="57")), fornecedores_boleto_conhecido=("FORNECEDOR A",))
+        self._em_ambos(dados, "2 notas de fornecedor com boleto conhecido fora do cálculo.")
+
+    def test_outro_fornecedor_com_boleto_diferente_continua_avisado(self) -> None:
+        conhecida = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "RAZAO", 275.0, 194.73)
+        outra = NotaForaDaConta("d", "79", "2026-03-10", CNPJ_LOJA, "OUTRA RAZAO", 100.0, 52.0)
+        dados = _dados(fora_por_boleto=(conhecida, outra), fornecedores_boleto_conhecido=("FORNECEDOR A",))
+        self._em_ambos(dados, "OUTRA RAZAO 79", "itens R$ 100,00", "1 nota de fornecedor com boleto conhecido")
+        self.assertIn("NÃO ENTROU NA CONTA", montar_relatorio(dados).texto)
+        self.assertNotIn("FORNECEDOR A 55", montar_relatorio(dados).texto)
+
+    def test_nome_parecido_nao_conta_como_conhecido(self) -> None:
+        nota = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "RAZAO", 275.0, 194.73)
+        dados = _dados(fora_por_boleto=(nota,), fornecedores_boleto_conhecido=("FORNECEDOR",))
+        self._em_ambos(dados, "itens R$ 275,00")
+
+    def test_sem_apelido_compara_pela_razao_social(self) -> None:
+        nota = NotaForaDaConta("c", "55", "2026-03-10", CNPJ_EMITENTE, "Razão Única", 275.0, 194.73)
+        dados = _dados(fora_por_boleto=(nota,), apelidos={}, fornecedores_boleto_conhecido=("RAZAO UNICA",))
+        self._em_ambos(dados, "1 nota de fornecedor com boleto conhecido")
+
+    def test_sem_nota_conhecida_o_rodape_nao_fala_disso(self) -> None:
+        self.assertNotIn("boleto conhecido", montar_relatorio(_dados(fornecedores_boleto_conhecido=("X",))).texto)
 
     def test_falha_do_cancelamento_e_avisada(self) -> None:
         self._em_ambos(_dados(falhas_de_cancelamento=2), "Não consegui conferir cancelamento")

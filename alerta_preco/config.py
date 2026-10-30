@@ -37,6 +37,8 @@ class Config:
     vps_ssh: str
     arquivo_env_remoto: str
     destinatarios_extras: tuple[str, ...]
+    # Fornecedor cujo boleto difere dos itens sempre: a nota fica fora do preço e vira só uma contagem no rodapé.
+    fornecedores_boleto_conhecido: tuple[str, ...] = ()
 
 
 def _texto(dados: dict[str, Any], secao: str, campo: str) -> str:
@@ -46,10 +48,9 @@ def _texto(dados: dict[str, Any], secao: str, campo: str) -> str:
     return valor
 
 
-def _extras(dados: dict[str, Any]) -> tuple[str, ...]:
-    valor = dados.get("envio", {}).get("destinatarios_extras", [])
+def _lista(valor: object, nome: str) -> tuple[str, ...]:
     if not isinstance(valor, list) or not all(isinstance(e, str) for e in valor):
-        raise ErroDeConfiguracao("envio.destinatarios_extras tem de ser uma lista de e-mails.")
+        raise ErroDeConfiguracao(f"{nome} tem de ser uma lista de textos.")
     return tuple(valor)
 
 
@@ -69,7 +70,12 @@ def ler_config(caminho: Path | None = None) -> Config:
         arquivo_env=Path(_texto(dados, "fontes", "arquivo_env")),
         vps_ssh=_texto(dados, "envio", "vps_ssh"),
         arquivo_env_remoto=_texto(dados, "envio", "arquivo_env_remoto"),
-        destinatarios_extras=_extras(dados),
+        destinatarios_extras=_lista(
+            dados.get("envio", {}).get("destinatarios_extras", []), "envio.destinatarios_extras"
+        ),
+        fornecedores_boleto_conhecido=_lista(
+            dados.get("fornecedores_boleto_conhecido", []), "fornecedores_boleto_conhecido"
+        ),
     )
 
 
