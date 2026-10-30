@@ -1,3 +1,4 @@
+import http.client
 import io
 import json
 import tempfile
@@ -149,6 +150,21 @@ class TestBanco(unittest.TestCase):
         with self.assertRaises(ErroDeFonte):
             banco.canceladas()
 
+    def test_conexao_cortada_no_meio_da_resposta_interrompe(self) -> None:
+        banco, _ = self._banco(http.client.IncompleteRead(b""))
+        with self.assertRaisesRegex(ErroDeFonte, "notas_fiscais"):
+            banco.canceladas()
+
+    def test_resposta_que_nao_e_lista_interrompe(self) -> None:
+        banco, _ = self._banco(_ok({"mensagem": "erro"}))
+        with self.assertRaisesRegex(ErroDeFonte, "notas_fiscais"):
+            banco.canceladas()
+
+    def test_linha_sem_a_coluna_esperada_interrompe(self) -> None:
+        banco, _ = self._banco(_ok([{"outra": 1}]))
+        with self.assertRaisesRegex(ErroDeFonte, "regra_produto"):
+            banco.regras()
+
 
 class TestPeriodos(unittest.TestCase):
     def test_pedacos_de_30_dias(self) -> None:
@@ -215,6 +231,23 @@ class TestEspiao(unittest.TestCase):
             _, falhas, _ = self._rodar(resposta)
             self.assertEqual(len(falhas), 1)
             self.assertNotIn(TOKEN_FALSO, falhas[0])
+
+    def test_conexao_cortada_vira_aviso(self) -> None:
+        self.assertEqual(len(self._rodar(http.client.IncompleteRead(b""))[1]), 1)
+
+    def test_resposta_de_formato_estranho_vira_aviso(self) -> None:
+        for nota in ({"situacao": {"codigo": 3}, "chaveAcesso": "a"}, "nao e objeto"):
+            canceladas, falhas, _ = self._rodar(_ok({"notas": [nota]}))
+            self.assertEqual((canceladas, len(falhas)), (set(), 1))
+
+    def test_proxima_pagina_vazia_encerra(self) -> None:
+        canceladas, falhas, servidor = self._rodar(_ok({"notas": [{"situacao": "cancelada", "chaveAcesso": "a"}], "codigoProximaPagina": ""}))
+        self.assertEqual((canceladas, falhas, len(servidor.pedidos)), ({"a"}, [], 1))
+
+    def test_proxima_pagina_repetida_vira_aviso_em_vez_de_laco(self) -> None:
+        pagina = {"notas": [], "codigoProximaPagina": "X"}
+        _, falhas, servidor = self._rodar(_ok(pagina), _ok(pagina))
+        self.assertEqual((len(falhas), len(servidor.pedidos)), (1, 2))
 
     def test_falha_de_um_periodo_nao_para_o_seguinte(self) -> None:
         servidor = _Servidor(_http(500), _ok([{"situacao": "cancelada", "chaveAcesso": "a"}]))

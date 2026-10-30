@@ -3,13 +3,15 @@
 Erro nunca traz chave, token ou senha: as mensagens dizem o que falhou e o código HTTP, nada do pedido.
 """
 
+import contextlib
+import http.client
 import json
 import re
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -69,6 +71,15 @@ class ConfigEspiao:
     user_token: str = field(repr=False)
 
 
+@contextlib.contextmanager
+def _formato_esperado(tabela: str) -> Iterator[None]:
+    """Linha fora do formato para a rodada: sem as regras ou as canceladas, a conta sairia errada e pareceria certa."""
+    try:
+        yield
+    except (AttributeError, KeyError, TypeError, ValueError) as e:
+        raise ErroDeFonte(f"Banco, tabela {tabela}: linha em formato inesperado ({type(e).__name__}).") from None
+
+
 class Banco:
     def __init__(self, credenciais: Credenciais, abrir: Abrir = _abrir) -> None:
         self._credenciais = credenciais
@@ -100,8 +111,10 @@ class Banco:
             except urllib.error.HTTPError as e:
                 e.close()
                 raise ErroDeFonte(f"Banco, tabela {tabela}: HTTP {e.code}.") from None
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, http.client.HTTPException) as e:
                 raise ErroDeFonte(f"Banco, tabela {tabela}: sem resposta válida ({type(e).__name__}).") from None
+            if not isinstance(pagina, list):
+                raise ErroDeFonte(f"Banco, tabela {tabela}: a resposta não é uma lista.")
             linhas += pagina
             if len(pagina) < TAMANHO_DA_PAGINA:
                 return linhas
@@ -109,27 +122,32 @@ class Banco:
     def regras(self) -> dict[str, RegraProduto]:
         """As regras de conversão por "raiz|código". O código fica como veio: zero à esquerda distingue produto."""
         linhas = self._ler("regra_produto", "cnpj_raiz,codigo_produto,catalogo_id,fator", "cnpj_raiz,codigo_produto")
-        return {
-            f"{x['cnpj_raiz']}|{x['codigo_produto']}": RegraProduto(
-                None if x["catalogo_id"] is None else str(x["catalogo_id"]),
-                None if x["fator"] is None else float(x["fator"]),
-            )
-            for x in linhas
-        }
+        with _formato_esperado("regra_produto"):
+            return {
+                f"{x['cnpj_raiz']}|{x['codigo_produto']}": RegraProduto(
+                    None if x["catalogo_id"] is None else str(x["catalogo_id"]),
+                    None if x["fator"] is None else float(x["fator"]),
+                )
+                for x in linhas
+            }
 
     def insumos(self) -> dict[str, tuple[str, str]]:
         """O nome e a unidade de cada matéria-prima."""
-        return {str(x["id"]): (x["nome"], x["unidade"]) for x in self._ler("insumo_catalogo", "id,nome,unidade", "id")}
+        linhas = self._ler("insumo_catalogo", "id,nome,unidade", "id")
+        with _formato_esperado("insumo_catalogo"):
+            return {str(x["id"]): (x["nome"], x["unidade"]) for x in linhas}
 
     def canceladas(self) -> set[str]:
         linhas = self._ler("notas_fiscais", "chave_acesso", "chave_acesso", {"status": "eq.cancelada"})
-        return {x["chave_acesso"] for x in linhas}
+        with _formato_esperado("notas_fiscais"):
+            return {x["chave_acesso"] for x in linhas}
 
     def configs_espiao(self) -> list[ConfigEspiao]:
         linhas = self._ler(
             "integracao_espiao_config", "cnpj,esp_cloud_token,user_token", "cnpj", {"ativo": "eq.true"}
         )
-        return [ConfigEspiao(x["cnpj"], x["esp_cloud_token"], x["user_token"]) for x in linhas]
+        with _formato_esperado("integracao_espiao_config"):
+            return [ConfigEspiao(x["cnpj"], x["esp_cloud_token"], x["user_token"]) for x in linhas]
 
 
 def periodos_de_consulta(de: str, ate: str) -> list[tuple[str, str]]:
@@ -173,17 +191,22 @@ def _consultar_periodo(
             if e.code == 404:  # período sem nota
                 return canceladas, None
             return canceladas, f"{config.cnpj} {de}: HTTP {e.code}"
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, TypeError, http.client.HTTPException) as e:
             return canceladas, f"{config.cnpj} {de}: {type(e).__name__}"
         por_dentro = dados.values() if isinstance(dados, dict) else ()
         notas = dados if isinstance(dados, list) else next((v for v in por_dentro if isinstance(v, list)), [])
-        for nota in notas:
-            situacao, chave = nota.get("situacao") or "", nota.get("chaveAcesso")
-            if chave and re.search("cancel", situacao, re.IGNORECASE):
-                canceladas.add(chave)
+        try:
+            for nota in notas:
+                situacao, chave = nota.get("situacao") or "", nota.get("chaveAcesso")
+                if chave and re.search("cancel", situacao, re.IGNORECASE):
+                    canceladas.add(chave)
+        except (AttributeError, TypeError) as e:
+            return canceladas, f"{config.cnpj} {de}: resposta em formato inesperado ({type(e).__name__})"
         proxima = dados.get("codigoProximaPagina") if isinstance(dados, dict) else None
-        if not isinstance(proxima, str) or proxima == "-1":
+        if not isinstance(proxima, str) or not proxima or proxima == "-1":
             return canceladas, None
+        if proxima == pagina:  # sem isto, o laço só pararia no limite de tempo da tarefa, sem nenhum aviso
+            return canceladas, f"{config.cnpj} {de}: a próxima página repetiu a atual"
         pagina = proxima
 
 
