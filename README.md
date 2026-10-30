@@ -76,7 +76,8 @@ python -m alerta_preco --email --reenviar                manda de novo uma seman
 ```
 
 Sem `--email`, nada é enviado. O código de saída é 0 quando deu certo, inclusive se a semana já tinha sido enviada, e 1 quando houve qualquer
-problema. Com `--email`, o problema também gera um aviso na tela do Windows, e o relatório fica salvo na prévia quando o que falhou foi o envio.
+problema. Com `--email`, o problema também gera um aviso no Windows, em faixa e numa janela que fica aberta até alguém fechar. O relatório fica
+salvo na prévia quando o que falhou foi o envio.
 
 O programa prefere não mandar e-mail a mandar um enganoso. Se faltar a pasta de um ano, se algum arquivo não abrir ou se não houver nenhuma nota
 na semana, a rodada para. Arquivo de NF-e cortado antes do fim fica fora da conta e aparece no e-mail, para ser baixado de novo.

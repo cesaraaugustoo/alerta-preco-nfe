@@ -33,5 +33,8 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e
   quando for baixado de novo.
 - Se o e-mail sai e a gravação do estado falha, o aviso diz que ele já saiu e como evitar um segundo envio.
 - Destinatário recusado pelo servidor de e-mail não conta mais como enviado, e o aviso diz qual endereço foi recusado.
+- O aviso de falha também abre uma janela que fica na tela até alguém fechar: a faixa do Windows dura segundos e pode passar despercebida.
+- Tabela de regras, de matérias-primas ou de configuração que vem vazia do banco para a rodada: a chave ou o acesso mudou, e a conta sairia
+  errada sem nenhum erro.
 - Resposta malformada do banco interrompe a rodada com uma mensagem clara; a do serviço de notas vira aviso no e-mail.
 - Próxima página vazia ou repetida no serviço de notas não prende mais a rodada em laço.

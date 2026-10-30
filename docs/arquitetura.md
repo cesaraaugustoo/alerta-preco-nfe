@@ -59,6 +59,9 @@ quando for baixado de novo, dentro da janela de atraso.
 **Erro inesperado também avisa.** O agendador não mostra a saída do programa. Sem o aviso na tela, uma exceção não prevista passaria sem ninguém
 saber que a rodada não saiu.
 
+**Faixa e janela no aviso.** A faixa do Windows dura segundos e pode passar despercebida, como aconteceu no primeiro teste. A janela fica aberta até
+alguém fechar e roda como processo à parte: não prende o programa nem conta no limite de tempo da tarefa.
+
 **O envio passa pelo servidor.** A senha do e-mail só existe no servidor e não vem para a máquina local. Um programa curto, enviado pelo `ssh`, lê
 o arquivo de segredos lá e recebe o relatório pela entrada padrão. A resposta dele é só em ASCII: um erro de acento depois do envio faria um
 e-mail que saiu parecer falha, e a próxima tentativa o repetiria.
