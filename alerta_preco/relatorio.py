@@ -125,7 +125,9 @@ def _nao_entrou(dados: DadosDoRelatorio) -> tuple[str, ...]:
     ]
     if dados.falhas_de_cancelamento:
         consultas = _plural(dados.falhas_de_cancelamento, "consulta", "consultas")
-        linhas.append(f"Não consegui conferir cancelamento em {consultas}: uma nota cancelada pode ter entrado na conta.")
+        linhas.append(
+            f"Não consegui conferir cancelamento em {consultas}: uma nota cancelada pode ter entrado na conta."
+        )
     return tuple(linhas)
 
 
