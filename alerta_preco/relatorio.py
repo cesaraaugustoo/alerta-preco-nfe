@@ -13,6 +13,7 @@ from .modelos import Alerta, NotaForaDaConta, Relatorio
 from .regra import TROCOU, chave_apelido
 
 DIAS_ATE_O_AVISO_DE_ATRASO = 3
+INCOMPLETOS_NO_EMAIL = 5
 AVISO_DE_ATRASO = "a pasta de notas pode estar atrasada"
 COBERTURA = "Não cobre hortifruti nem compra sem nota."
 
@@ -66,6 +67,7 @@ class DadosDoRelatorio:
     lojas: Mapping[str, str]
     insumos: Mapping[str, tuple[str, str]]
     fornecedores_boleto_conhecido: Sequence[str] = ()
+    notas_incompletas: Sequence[str] = ()
     teste: bool = False
 
 
@@ -135,6 +137,11 @@ def _nao_entrou(dados: DadosDoRelatorio) -> tuple[str, ...]:
         linhas.append(
             f"Não consegui conferir cancelamento em {consultas}: uma nota cancelada pode ter entrado na conta."
         )
+    if dados.notas_incompletas:
+        quantos = _plural(len(dados.notas_incompletas), "arquivo de nota incompleto", "arquivos de nota incompletos")
+        nomes = ", ".join(dados.notas_incompletas[:INCOMPLETOS_NO_EMAIL])
+        resto = len(dados.notas_incompletas) - INCOMPLETOS_NO_EMAIL
+        linhas.append(f"{quantos}, fora da conta. Baixe de novo: {nomes}{f' e mais {resto}' if resto > 0 else ''}.")
     return tuple(linhas)
 
 

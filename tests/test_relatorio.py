@@ -242,6 +242,19 @@ class TestCorpo(unittest.TestCase):
     def test_sem_nota_conhecida_o_rodape_nao_fala_disso(self) -> None:
         self.assertNotIn("boleto conhecido", montar_relatorio(_dados(fornecedores_boleto_conhecido=("X",))).texto)
 
+    def test_arquivo_incompleto_aparece_com_o_nome(self) -> None:
+        self._em_ambos(_dados(notas_incompletas=("a.xml",)), "1 arquivo de nota incompleto", "a.xml", "Baixe de novo")
+        self.assertIn("NÃO ENTROU NA CONTA", montar_relatorio(_dados(notas_incompletas=("a.xml",))).texto)
+
+    def test_varios_arquivos_incompletos_mostram_os_primeiros_e_a_contagem(self) -> None:
+        nomes = tuple(f"{i}.xml" for i in range(7))
+        self._em_ambos(_dados(notas_incompletas=nomes), "7 arquivos de nota incompletos", "4.xml", "e mais 2")
+        for corpo in self._ambos(_dados(notas_incompletas=nomes)):
+            self.assertNotIn("5.xml", corpo)
+
+    def test_nome_do_arquivo_e_escapado_no_html(self) -> None:
+        self.assertIn("a&amp;b.xml", montar_relatorio(_dados(notas_incompletas=("a&b.xml",))).html)
+
     def test_falha_do_cancelamento_e_avisada(self) -> None:
         self._em_ambos(_dados(falhas_de_cancelamento=2), "Não consegui conferir cancelamento")
         self.assertNotIn("Não consegui conferir", montar_relatorio(_dados()).texto)
