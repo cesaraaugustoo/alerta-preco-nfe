@@ -121,8 +121,15 @@ $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell
 """
 
 
+# A faixa dura segundos e some na central de notificações. A janela fica sobre as outras, sem tempo limite, até
+# alguém fechar: quem chegar depois das 8h10 ainda vê a falha.
+_JANELA = "(New-Object -ComObject WScript.Shell).Popup($env:AVISO, 0, $env:TITULO, 0x1030) | Out-Null"
+_SEM_CONSOLE = 0x08000000  # CREATE_NO_WINDOW; com DETACHED_PROCESS, o PowerShell termina na hora sem abrir nada
+_GRUPO_PROPRIO = 0x00000200  # CREATE_NEW_PROCESS_GROUP
+
+
 def aviso_na_tela(titulo: str, texto: str) -> None:
-    """Aviso na tela do Windows: com o servidor fora, o e-mail não sai, e ninguém saberia que a rotina falhou."""
+    """Faixa e janela no Windows: com o servidor fora, o e-mail não sai, e ninguém saberia que a rotina falhou."""
     if sys.platform != "win32":
         return
     ambiente = {**os.environ, "TITULO": titulo, "AVISO": texto[:TAMANHO_DO_AVISO]}
@@ -134,4 +141,13 @@ def aviso_na_tela(titulo: str, texto: str) -> None:
             capture_output=True,
             timeout=30,
             check=False,
+        )
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.Popen(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", _JANELA],
+            env=ambiente,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=_SEM_CONSOLE | _GRUPO_PROPRIO,
         )

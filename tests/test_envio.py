@@ -183,26 +183,59 @@ class TestEnviarEmail(unittest.TestCase):
 
 
 class TestAvisoNaTela(unittest.TestCase):
-    def test_no_windows_chama_o_powershell_com_o_texto_no_ambiente(self) -> None:
-        with mock.patch("alerta_preco.envio.sys.platform", "win32"), mock.patch("alerta_preco.envio.subprocess.run") as run:
+    def _no_windows(self, **erros: Exception) -> tuple[mock.MagicMock, mock.MagicMock]:
+        with (
+            mock.patch("alerta_preco.envio.sys.platform", "win32"),
+            mock.patch("alerta_preco.envio.subprocess.run", side_effect=erros.get("faixa")) as run,
+            mock.patch("alerta_preco.envio.subprocess.Popen", side_effect=erros.get("janela")) as popen,
+        ):
             aviso_na_tela("Titulo", "x" * 300)
+        return run, popen
+
+    def test_no_windows_chama_o_powershell_com_o_texto_no_ambiente(self) -> None:
+        run, _ = self._no_windows()
         self.assertEqual(run.call_args.args[0][0], "powershell.exe")
         ambiente = run.call_args.kwargs["env"]
         self.assertEqual(ambiente["TITULO"], "Titulo")
         self.assertEqual(ambiente["AVISO"], "x" * 250)
         self.assertNotIn("Titulo", " ".join(run.call_args.args[0]))
 
-    def test_fora_do_windows_nao_faz_nada(self) -> None:
-        with mock.patch("alerta_preco.envio.sys.platform", "linux"), mock.patch("alerta_preco.envio.subprocess.run") as run:
-            aviso_na_tela("Titulo", "texto")
-        run.assert_not_called()
+    def test_abre_uma_janela_que_fica_ate_alguem_fechar(self) -> None:
+        _, popen = self._no_windows()
+        comando = popen.call_args.args[0]
+        self.assertEqual(comando[0], "powershell.exe")
+        self.assertIn("Popup($env:AVISO, 0, $env:TITULO", comando[-1])  # 0: sem tempo limite
+        self.assertEqual(popen.call_args.kwargs["env"]["AVISO"], "x" * 250)
+        self.assertNotIn("Titulo", " ".join(comando))
 
-    def test_falha_no_aviso_nao_derruba_a_rotina(self) -> None:
+    def test_a_janela_nao_prende_a_rotina(self) -> None:
+        _, popen = self._no_windows()
+        self.assertEqual(popen.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        popen.return_value.wait.assert_not_called()
+
+    def test_a_janela_abre_sem_console_mas_com_o_powershell_vivo(self) -> None:
+        # Medido no Windows: com DETACHED_PROCESS (0x8), o PowerShell termina na hora, com código 0, sem abrir nada.
+        _, popen = self._no_windows()
+        opcoes = popen.call_args.kwargs["creationflags"]
+        self.assertTrue(opcoes & 0x08000000)
+        self.assertFalse(opcoes & 0x8)
+
+    def test_fora_do_windows_nao_faz_nada(self) -> None:
         with (
-            mock.patch("alerta_preco.envio.sys.platform", "win32"),
-            mock.patch("alerta_preco.envio.subprocess.run", side_effect=OSError("sem powershell")),
+            mock.patch("alerta_preco.envio.sys.platform", "linux"),
+            mock.patch("alerta_preco.envio.subprocess.run") as run,
+            mock.patch("alerta_preco.envio.subprocess.Popen") as popen,
         ):
             aviso_na_tela("Titulo", "texto")
+        run.assert_not_called()
+        popen.assert_not_called()
+
+    def test_falha_no_aviso_nao_derruba_a_rotina(self) -> None:
+        self._no_windows(faixa=OSError("sem powershell"), janela=OSError("sem powershell"))
+
+    def test_falha_na_faixa_nao_impede_a_janela(self) -> None:
+        _, popen = self._no_windows(faixa=subprocess.TimeoutExpired("powershell", 1))
+        popen.assert_called_once()
 
 
 if __name__ == "__main__":
