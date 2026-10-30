@@ -24,6 +24,9 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]  # dados de teste ficam mais legíveis numa linha só
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

@@ -26,3 +26,64 @@ class Nota:
     emitente_nome: str | None
     destinatario_cnpj: str | None
     itens: tuple[Item, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RegraProduto:
+    """A regra de conversão de um produto: a matéria-prima e quantas unidades de controle vêm nele."""
+
+    catalogo_id: str | None
+    fator: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class NotaForaDaConta:
+    """Nota cujo boleto não fecha com os itens: o preço rateado seria falso."""
+
+    numero: str
+    data_emissao: str
+    emitente_cnpj: str | None
+    emitente_nome: str | None
+    soma_itens: float
+    soma_boleto: float
+
+
+@dataclass(frozen=True, slots=True)
+class LinhaDePreco:
+    produto: str
+    codigo_produto: str
+    descricao: str
+    unidade: str
+    data_emissao: str
+    chave_acesso: str
+    posicao: int
+    numero_nota: str
+    preco: float
+    quantidade: float
+    materia_prima: str | None
+    fator: float
+    emitente_cnpj: str | None
+    emitente_nome: str | None
+    destinatario_cnpj: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Alerta:
+    produto: str
+    codigo_produto: str
+    descricao: str
+    unidade: str
+    preco: float
+    base: float
+    alta: float
+    a_mais: float
+    quantidade: float
+    numero_nota: str
+    data_emissao: str
+    como: str
+    materia_prima: str | None
+    fator: float
+    emitente_cnpj: str | None
+    emitente_nome: str | None
+    destinatario_cnpj: str | None
+    chegou_depois: bool
