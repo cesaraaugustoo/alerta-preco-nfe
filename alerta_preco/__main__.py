@@ -36,7 +36,9 @@ def main(argumentos: list[str] | None = None) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):  # no Windows, o padrão não é UTF-8
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="alerta_preco", description="Relatório semanal de altas de preço.")
-    parser.add_argument("--conferir-leitura", type=Path, metavar="ARQUIVO", help="compara a leitura com a do JavaScript")
+    parser.add_argument(
+        "--conferir-leitura", type=Path, metavar="ARQUIVO", help="compara a leitura com a do JavaScript"
+    )
     args = parser.parse_args(argumentos)
     try:
         if args.conferir_leitura:

@@ -21,9 +21,9 @@ TERMOS_NAO_COMERCIAL = ("BONIFICA", "BRINDE", "REMESSA", "DOACAO", "DEMONSTRA", 
 # Diferença tolerada entre as duas leituras, por valor.
 TOLERANCIA = 0.005
 
-_ESPACO_JS = (
-    " \t\n\v\f\r             "
-    "    　﻿"
+# Os espaços que o `trim` e o `\\s` do JavaScript reconhecem; `strip` e `\\s` do Python reconhecem outros.
+_ESPACO_JS = " \t\n\v\f\r" + "".join(
+    map(chr, (0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF))
 )
 _S_JS = "[" + _ESPACO_JS + ">]"
 _PARSE_FLOAT = re.compile(r"[+-]?(?:Infinity|[0-9]+\.?[0-9]*(?:[eE][+-]?[0-9]+)?|\.[0-9]+(?:[eE][+-]?[0-9]+)?)")
