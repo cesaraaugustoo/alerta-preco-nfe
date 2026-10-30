@@ -119,9 +119,20 @@ class Banco:
             if len(pagina) < TAMANHO_DA_PAGINA:
                 return linhas
 
+    def _ler_cheia(
+        self, tabela: str, colunas: str, ordem: str, filtros: Mapping[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Tabela que nunca fica vazia: se vier, a chave ou o acesso mudou, e a conta sairia errada sem nenhum erro."""
+        linhas = self._ler(tabela, colunas, ordem, filtros)
+        if not linhas:
+            raise ErroDeFonte(f"Banco, tabela {tabela}: veio vazia. A chave do banco pode ter mudado.")
+        return linhas
+
     def regras(self) -> dict[str, RegraProduto]:
         """As regras de conversão por "raiz|código". O código fica como veio: zero à esquerda distingue produto."""
-        linhas = self._ler("regra_produto", "cnpj_raiz,codigo_produto,catalogo_id,fator", "cnpj_raiz,codigo_produto")
+        linhas = self._ler_cheia(
+            "regra_produto", "cnpj_raiz,codigo_produto,catalogo_id,fator", "cnpj_raiz,codigo_produto"
+        )
         with _formato_esperado("regra_produto"):
             return {
                 f"{x['cnpj_raiz']}|{x['codigo_produto']}": RegraProduto(
@@ -133,7 +144,7 @@ class Banco:
 
     def insumos(self) -> dict[str, tuple[str, str]]:
         """O nome e a unidade de cada matéria-prima."""
-        linhas = self._ler("insumo_catalogo", "id,nome,unidade", "id")
+        linhas = self._ler_cheia("insumo_catalogo", "id,nome,unidade", "id")
         with _formato_esperado("insumo_catalogo"):
             return {str(x["id"]): (x["nome"], x["unidade"]) for x in linhas}
 
@@ -143,7 +154,7 @@ class Banco:
             return {x["chave_acesso"] for x in linhas}
 
     def configs_espiao(self) -> list[ConfigEspiao]:
-        linhas = self._ler(
+        linhas = self._ler_cheia(
             "integracao_espiao_config", "cnpj,esp_cloud_token,user_token", "cnpj", {"ativo": "eq.true"}
         )
         with _formato_esperado("integracao_espiao_config"):

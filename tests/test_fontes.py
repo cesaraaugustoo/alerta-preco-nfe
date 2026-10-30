@@ -150,6 +150,20 @@ class TestBanco(unittest.TestCase):
         with self.assertRaises(ErroDeFonte):
             banco.canceladas()
 
+    def test_tabela_obrigatoria_vazia_interrompe(self) -> None:
+        for tabela, ler in (
+            ("regra_produto", Banco.regras),
+            ("insumo_catalogo", Banco.insumos),
+            ("integracao_espiao_config", Banco.configs_espiao),
+        ):
+            banco, _ = self._banco(_ok([]))
+            with self.assertRaisesRegex(ErroDeFonte, tabela):
+                ler(banco)
+
+    def test_nenhuma_nota_cancelada_e_normal(self) -> None:
+        banco, _ = self._banco(_ok([]))
+        self.assertEqual(banco.canceladas(), set())
+
     def test_conexao_cortada_no_meio_da_resposta_interrompe(self) -> None:
         banco, _ = self._banco(http.client.IncompleteRead(b""))
         with self.assertRaisesRegex(ErroDeFonte, "notas_fiscais"):
