@@ -3,6 +3,18 @@
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/), e as versões seguem o
 [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [Não lançado]
+
+### Adicionado
+
+- Trava contra e-mail repetido: grava `envio-pendente-AAAA-MM-DD.txt` antes do envio e só apaga depois do estado. Se ela sobrar, a rodada seguinte
+  da semana não envia e avisa. Assim, a tarefa pode ser agendada duas vezes na mesma manhã.
+- Cada falha ganha uma linha em `falhas.log`, na pasta local, com data, comando e motivo.
+
+### Mudado
+
+- O erro de envio diz se o e-mail pode ter saído: sem resposta a tempo, ou com a conexão caída no meio.
+
 ## [0.1.0] - 2026-10-30
 
 ### Adicionado

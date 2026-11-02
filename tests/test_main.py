@@ -241,6 +241,7 @@ class TestEnsaio(_CenarioDeEnsaio):
         codigo, saida = self._rodar("--semana", "2026-03-09")
         self.assertEqual(codigo, 1)
         self.assertIn("estado.json", saida)
+        self.assertIn("estado.json", (self.local / "falhas.log").read_text(encoding="utf-8"))
 
 
 class TestEmail(_CenarioDeEnsaio):
@@ -321,7 +322,7 @@ class TestEmail(_CenarioDeEnsaio):
             self._rodar("--email", "--semana", "2026-03-16")
         self.assertIn("4" * 44, self._lido().notas_avaliadas)
 
-    def test_estado_nao_gravado_diz_que_o_email_saiu_e_como_evitar_outro(self) -> None:
+    def test_estado_nao_gravado_diz_que_o_email_saiu_e_que_nao_sai_outro(self) -> None:
         with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=PermissionError(13, "negado", "/x/estado.json")):
             codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
         self.assertEqual(codigo, 1)
@@ -329,9 +330,115 @@ class TestEmail(_CenarioDeEnsaio):
         aviso = self.aviso.call_args.args[1]
         for texto in (saida, aviso):
             self.assertIn("já saiu", texto)
-            self.assertIn("Não rode de novo", texto)
+            self.assertIn("não manda outro", texto)
         self.assertNotIn("falhou", self.aviso.call_args.args[0])
         self.assertLessEqual(len(aviso), TAMANHO_DO_AVISO)
+
+    def _travas(self) -> list[Path]:
+        return sorted(self.local.glob("envio-pendente-*"))
+
+    def _segunda_rodada_nao_envia(self) -> None:
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_called_once()
+        aviso = self.aviso.call_args.args[1]
+        for texto in (saida, aviso):
+            self.assertIn("pode ter saído", texto)
+            self.assertIn("envio-pendente-2026-03-09", texto)
+        self.assertLessEqual(len(aviso), TAMANHO_DO_AVISO)
+
+    def test_estado_nao_gravado_a_rodada_seguinte_nao_manda_outro_email(self) -> None:
+        # O caso das 8h10 e 9h10: o e-mail saiu, o estado não foi gravado, e a segunda rodada da manhã chega.
+        with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=PermissionError("negado")):
+            self._rodar("--email", "--semana", "2026-03-09")
+        self._segunda_rodada_nao_envia()
+
+    def test_queda_do_programa_logo_depois_do_envio_nao_repete_o_email(self) -> None:
+        with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=KeyboardInterrupt), contextlib.suppress(KeyboardInterrupt):
+            self._rodar("--email", "--semana", "2026-03-09")
+        self._segunda_rodada_nao_envia()
+
+    def test_servidor_sem_resposta_a_rodada_seguinte_nao_manda_outro_email(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("O servidor não respondeu a tempo.", talvez_enviado=True)
+        codigo, saida = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.assertIn("pode ter saído", saida)
+        self.enviar.side_effect = None
+        self._segunda_rodada_nao_envia()
+
+    def test_envio_completo_nao_deixa_trava(self) -> None:
+        self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 0)
+        self.assertEqual(self._travas(), [])
+
+    def test_falha_certa_antes_do_envio_tira_a_trava(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("fora do ar")
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(self._travas(), [])
+
+    def test_trava_que_nao_grava_nao_envia(self) -> None:
+        (self.local / "envio-pendente-2026-03-09.txt").mkdir(parents=True)
+        codigo, _ = self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(codigo, 1)
+        self.enviar.assert_not_called()
+        self.aviso.assert_called_once()
+
+    def test_reenviar_passa_pela_trava_e_a_tira(self) -> None:
+        with mock.patch("alerta_preco.__main__.gravar_estado", side_effect=PermissionError("negado")):
+            self._rodar("--email", "--semana", "2026-03-09")
+        self.assertEqual(self._rodar("--email", "--reenviar", "--semana", "2026-03-09")[0], 0)
+        self.assertEqual(self.enviar.call_count, 2)
+        self.assertEqual(self._travas(), [])
+        self.assertEqual(self._lido().semanas_enviadas, ["2026-03-09"])
+
+    def test_teste_nao_usa_a_trava(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("O servidor não respondeu a tempo.", talvez_enviado=True)
+        self._rodar("--email", "--teste", "--semana", "2026-03-09")
+        self.assertEqual(self._travas(), [])
+        self.enviar.side_effect = None
+        self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 0)
+
+    def test_trava_de_outra_semana_nao_impede_esta(self) -> None:
+        self.local.mkdir()
+        (self.local / "envio-pendente-2026-03-02.txt").write_text("", encoding="utf-8")
+        self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 0)
+        self.enviar.assert_called_once()
+
+    def _falhas(self) -> list[str]:
+        return (self.local / "falhas.log").read_text(encoding="utf-8").splitlines()
+
+    def test_toda_falha_fica_registrada_com_data_comando_e_motivo(self) -> None:
+        shutil.rmtree(self.pasta / "notas" / "2026")
+        self._rodar("--email", "--semana", "2026-03-09")
+        self._rodar("--email", "--semana", "2026-03-09")
+        linhas = self._falhas()
+        self.assertEqual(len(linhas), 2)
+        self.assertRegex(linhas[0], r"^\d\d/\d\d/\d{4} \d\d:\d\d:\d\d \| --email --semana 2026-03-09 \| .*2026")
+
+    def test_aviso_depois_do_envio_tambem_fica_registrado(self) -> None:
+        self.enviar.return_value = Envio(self.RESPOSTA, ("pessoa@exemplo.com",))
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.assertIn("pessoa@exemplo.com", self._falhas()[0])
+
+    def test_falha_de_envio_fica_registrada(self) -> None:
+        self.enviar.side_effect = ErroDeEnvio("Falha no envio: SMTPException")
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.assertIn("SMTPException", self._falhas()[0])
+
+    def test_rodada_sem_falha_nao_cria_o_registro(self) -> None:
+        self._rodar("--email", "--semana", "2026-03-09")
+        self.assertFalse((self.local / "falhas.log").exists())
+
+    def test_registro_que_nao_grava_nao_impede_o_aviso(self) -> None:
+        (self.local / "falhas.log").mkdir(parents=True)
+        shutil.rmtree(self.pasta / "notas" / "2026")
+        self.assertEqual(self._rodar("--email", "--semana", "2026-03-09")[0], 1)
+        self.aviso.assert_called_once()
+
+    def test_registro_nao_traz_o_conteudo_do_erro_inesperado(self) -> None:
+        with mock.patch("alerta_preco.__main__.regra.filtrar_notas", side_effect=RuntimeError("conteudo-sensivel")):
+            self._rodar("--email", "--semana", "2026-03-09")
+        self.assertIn("RuntimeError", self._falhas()[0])
+        self.assertNotIn("conteudo-sensivel", self._falhas()[0])
 
     def test_destinatario_recusado_avisa_o_endereco_e_grava_o_estado(self) -> None:
         self.enviar.return_value = Envio(self.RESPOSTA, ("pessoa@exemplo.com",))
@@ -348,7 +455,7 @@ class TestEmail(_CenarioDeEnsaio):
         aviso = self.aviso.call_args.args[1]
         self.assertLessEqual(len(aviso), TAMANHO_DO_AVISO)
         self.assertIn("pessoa-com-endereco-comprido@exemplo.com", aviso)
-        self.assertIn("Não rode de novo", aviso)
+        self.assertIn("não manda outro", aviso)
 
     def _lido(self) -> Estado:
         estado = carregar_estado(self.estado)

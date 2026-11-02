@@ -1,11 +1,12 @@
 """A linha de comando e a orquestração da rodada."""
 
 import argparse
+import contextlib
 import io
 import json
 import sys
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import config, regra
@@ -21,6 +22,7 @@ from .estado import (
     segunda_da_semana,
     semana_anterior,
     semanas_entre,
+    trava_do_envio,
 )
 from .fontes import Banco, ErroDeFonte, canceladas_no_espiao, ler_credenciais, ler_tabelas
 from .modelos import Relatorio
@@ -30,6 +32,7 @@ from .xml_nota import ErroDeLeitura, LeituraDaPasta, conferir_leitura, ler_pasta
 DIFERENCAS_NA_TELA = 20
 _TITULO_DA_FALHA = "Alerta de preço: falhou"
 _TITULO_DO_ALERTA = "Alerta de preço: atenção"
+ARQUIVO_DE_FALHAS = "falhas.log"  # na pasta local, uma linha por falha, com data, comando e motivo
 
 
 def _hoje() -> date:
@@ -176,25 +179,66 @@ def _ensaio(semana: str | None) -> int:
     return 0
 
 
-def _enviar(semana: str | None, teste: bool, reenviar: bool) -> int:
+def _registrar_falha(comando: str, mensagem: str) -> None:
+    """Guarda o motivo em disco: a janela some quando alguém a fecha, e a saída da tarefa não fica em lugar nenhum."""
+    linha = f"{datetime.now():%d/%m/%Y %H:%M:%S} | {comando} | {' '.join(mensagem.split())}\n"
+    with contextlib.suppress(OSError):
+        config.PASTA_LOCAL.mkdir(parents=True, exist_ok=True)
+        with (config.PASTA_LOCAL / ARQUIVO_DE_FALHAS).open("a", encoding="utf-8", newline="\n") as f:
+            f.write(linha)
+
+
+def _falhou(comando: str, mensagem: str, titulo: str | None) -> int:
+    """Mostra, registra e, se houver título, avisa na tela. Devolve o código de saída da falha."""
+    print(mensagem, file=sys.stderr)
+    _registrar_falha(comando, mensagem)
+    if titulo:
+        aviso_na_tela(titulo, mensagem)
+    return 1
+
+
+def _tirar_trava(trava: Path) -> None:
+    # Se não apagar, a próxima rodada da semana para e avisa: erra para o lado de não repetir o e-mail.
+    with contextlib.suppress(OSError):
+        trava.unlink(missing_ok=True)
+
+
+def _enviar(semana: str | None, teste: bool, reenviar: bool, comando: str) -> int:
     """Manda o e-mail. O estado só é gravado depois de ele sair, e nunca no teste."""
     cfg = config.carregar_config()
     hoje = _hoje()
     segunda = _segunda(semana, hoje)
-    if not teste and not reenviar and ja_enviada(carregar_estado(), segunda):
-        periodo = intervalo(segunda.isoformat(), (segunda + timedelta(days=6)).isoformat())
-        print(f"A semana {periodo} já foi enviada; nada a fazer. Com --reenviar, manda de novo.")
-        return 0
+    periodo = intervalo(segunda.isoformat(), (segunda + timedelta(days=6)).isoformat())
+    trava = trava_do_envio(segunda)
+    if not teste and not reenviar:
+        if ja_enviada(carregar_estado(), segunda):
+            print(f"A semana {periodo} já foi enviada; nada a fazer. Com --reenviar, manda de novo.")
+            return 0
+        if trava.exists():
+            return _falhou(
+                comando,
+                f"O e-mail {periodo} pode ter saído numa rodada anterior, sem registro. Nada foi enviado agora. "
+                f"Se não chegou, apague {trava} e rode de novo.",
+                _TITULO_DO_ALERTA,
+            )
 
     rodada = _montar_rodada(cfg, segunda, hoje, teste, reenviar)
     texto, _ = _salvar_previa(rodada.relatorio, segunda)
     extras = () if teste else cfg.destinatarios_extras
+    if not teste:
+        # Sem a trava gravada, nada sai: um erro aqui para a rodada antes do envio.
+        trava.parent.mkdir(parents=True, exist_ok=True)
+        trava.write_text(f"{datetime.now():%d/%m/%Y %H:%M:%S}\n", encoding="utf-8")
     try:
         envio = enviar_email(cfg.vps_ssh, cfg.arquivo_env_remoto, rodada.relatorio, extras)
     except ErroDeEnvio as e:
-        print(f"O e-mail não saiu ({e}). O relatório está em {texto}.", file=sys.stderr)
-        aviso_na_tela(_TITULO_DA_FALHA, f"O e-mail não saiu ({e}). O relatório está em {texto}.")
-        return 1
+        if e.talvez_enviado:
+            depois = "" if teste else " A próxima rodada desta semana não manda outro."
+            mensagem = f"O e-mail pode ter saído ({e}). Confira se chegou.{depois} Relatório em {texto}."
+            return _falhou(comando, mensagem, _TITULO_DA_FALHA)
+        if not teste:
+            _tirar_trava(trava)
+        return _falhou(comando, f"O e-mail não saiu ({e}). O relatório está em {texto}.", _TITULO_DA_FALHA)
     print(envio.resposta)
 
     avisos: list[str] = []
@@ -204,15 +248,14 @@ def _enviar(semana: str | None, teste: bool, reenviar: bool) -> int:
         try:
             gravar_estado(registrar_envio(carregar_estado(), segunda, rodada.chaves, rodada.avisados))
         except (ErroDeEstado, OSError) as e:
-            # O aviso cabe na tela só até certo tamanho: o que evita um segundo e-mail vem antes do detalhe.
             avisos.append(
                 f"O e-mail já saiu, mas o estado não foi gravado ({type(e).__name__}). "
-                "Não rode de novo nesta semana: mandaria um segundo e-mail."
+                "A próxima rodada desta semana não manda outro."
             )
+        else:
+            _tirar_trava(trava)
     if avisos:
-        print(" ".join(avisos), file=sys.stderr)
-        aviso_na_tela(_TITULO_DO_ALERTA, " ".join(avisos))
-        return 1
+        return _falhou(comando, " ".join(avisos), _TITULO_DO_ALERTA)
     return 0
 
 
@@ -232,22 +275,20 @@ def main(argumentos: list[str] | None = None) -> int:
     if (args.teste or args.reenviar) and not args.email:
         print("--teste e --reenviar só valem com --email.", file=sys.stderr)
         return 1
+    comando = " ".join(sys.argv[1:] if argumentos is None else argumentos) or "(ensaio)"
     try:
         if args.conferir_leitura:
             return _conferir_leitura(args.conferir_leitura)
         if args.simular:
             return _simular(*args.simular)
         if args.email:
-            return _enviar(args.semana, args.teste, args.reenviar)
+            return _enviar(args.semana, args.teste, args.reenviar, comando)
         return _ensaio(args.semana)
     except (config.ErroDeConfiguracao, ErroDeFonte, ErroDeEstado, ErroDeLeitura, OSError, ValueError) as e:
         mensagem = str(e)
     except Exception as e:  # nenhum erro passa sem aviso; só o tipo, porque o texto dele pode trazer conteúdo
         mensagem = f"Erro inesperado ({type(e).__name__}). Nada foi enviado."
-    print(mensagem, file=sys.stderr)
-    if args.email:
-        aviso_na_tela(_TITULO_DA_FALHA, mensagem)
-    return 1
+    return _falhou(comando, mensagem, _TITULO_DA_FALHA if args.email else None)
 
 
 if __name__ == "__main__":

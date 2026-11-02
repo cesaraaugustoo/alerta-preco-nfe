@@ -76,6 +76,11 @@ def ja_enviada(estado: Estado | None, segunda: date) -> bool:
     return estado is not None and segunda.isoformat() in estado.semanas_enviadas
 
 
+def trava_do_envio(segunda: date) -> Path:
+    """Gravada antes do envio e apagada depois do estado: se sobrar, o e-mail da semana pode ter saído sem registro."""
+    return CAMINHO_PADRAO.parent / f"envio-pendente-{segunda.isoformat()}.txt"
+
+
 def avisados_da_rodada(estado: Estado | None, segunda: date, reenviar: bool) -> dict[str, float]:
     """Contra o que comparar a repetição: no reenvio da mesma semana, o que valia antes dela."""
     if estado is None:

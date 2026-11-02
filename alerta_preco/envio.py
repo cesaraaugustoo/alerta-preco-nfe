@@ -60,10 +60,16 @@ for e in recusados:
     print('Recusado: ' + e.encode('ascii', 'replace').decode())
 """
 _PREFIXO_DO_RECUSADO = "Recusado: "
+# O ssh sai com 255 nos erros dele: com estas mensagens, a conexão nem abriu e o programa remoto não rodou.
+_SEM_CONEXAO = ("connect to host", "Could not resolve hostname", "Permission denied", "Host key verification failed")
 
 
 class ErroDeEnvio(Exception):
-    """O e-mail não saiu; a mensagem traz só o motivo."""
+    """O e-mail não saiu, ou pode ter saído (`talvez_enviado`); a mensagem traz só o motivo."""
+
+    def __init__(self, motivo: str, talvez_enviado: bool = False) -> None:
+        super().__init__(motivo)
+        self.talvez_enviado = talvez_enviado
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,13 +102,15 @@ def enviar_email(vps: str, arquivo_env_remoto: str, relatorio: Relatorio, extras
             comando, input=json.dumps(conteudo).encode("utf-8"), capture_output=True, timeout=TEMPO_LIMITE, check=False
         )
     except subprocess.TimeoutExpired:
-        raise ErroDeEnvio("O servidor não respondeu a tempo.") from None
+        raise ErroDeEnvio("O servidor não respondeu a tempo.", talvez_enviado=True) from None
     except OSError as e:
         raise ErroDeEnvio(f"Não consegui chamar o ssh ({type(e).__name__}).") from None
     if resultado.returncode != 0:
         linhas = resultado.stderr.decode("utf-8", errors="replace").strip().splitlines()
         motivo = linhas[-1] if linhas else f"o ssh terminou com o código {resultado.returncode}"
-        raise ErroDeEnvio(motivo[:TAMANHO_DO_MOTIVO])
+        # Outro código vem do programa remoto, que só sai assim antes de enviar; 255 sem conexão aberta também.
+        caiu_no_meio = resultado.returncode == 255 and not any(m in motivo for m in _SEM_CONEXAO)
+        raise ErroDeEnvio(motivo[:TAMANHO_DO_MOTIVO], talvez_enviado=caiu_no_meio)
     linhas = resultado.stdout.decode("utf-8", errors="replace").strip().splitlines()
     recusados = tuple(x.removeprefix(_PREFIXO_DO_RECUSADO) for x in linhas if x.startswith(_PREFIXO_DO_RECUSADO))
     return Envio(next((x for x in linhas if not x.startswith(_PREFIXO_DO_RECUSADO)), ""), recusados)

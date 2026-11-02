@@ -48,6 +48,14 @@ mesma comparação numa pasta real, sem levar nada para o repositório. Por isso
 **Estado gravado depois do envio.** Se o e-mail falha, a próxima execução tenta de novo. O arquivo é escrito num temporário e trocado de uma
 vez, e um estado ilegível para a rodada, em vez de ser tratado como vazio, porque isso reenviaria avisos antigos.
 
+**Trava antes do envio.** O estado só registra o que já saiu, então um e-mail que sai sem o estado ser gravado ficaria sem registro, e uma
+segunda rodada da mesma manhã o repetiria. Por isso a rodada grava uma trava antes de chamar o servidor. A trava só é apagada em dois casos:
+quando o estado foi gravado, ou quando a falha garante que nada saiu, como a conexão que não abriu ou o erro do programa remoto antes do envio.
+Sem resposta a tempo ou com a conexão caída no meio, a trava fica. Na dúvida, perde-se uma tentativa, mas ninguém recebe o e-mail duas vezes.
+
+**Falhas em arquivo.** O agendador descarta a saída do programa, e a janela some quando alguém a fecha. Cada falha vira uma linha em
+`falhas.log`, com o mesmo texto do aviso, que já sai sem conteúdo sensível.
+
 **Falha de fonte para a rodada.** Sem as regras de conversão ou as notas canceladas, a conta sairia errada e pareceria certa. É melhor não mandar
 e-mail e avisar na tela do que mandar um relatório enganoso. O mesmo vale para a pasta de notas: um "nenhuma alta" só pode sair depois de lidas
 todas as notas. A exceção é a pasta do ano seguinte, que pode não existir no começo de janeiro.

@@ -181,6 +181,30 @@ class TestEnviarEmail(unittest.TestCase):
                 enviar_email("v", "/e", RELATORIO, ())
             self.assertNotIn("segredo", str(erro.exception))
 
+    def test_falha_antes_do_envio_deixa_tentar_de_novo(self) -> None:
+        for codigo, erro_do_ssh in (
+            (1, b"Falha no envio: SMTPAuthenticationError\n"),
+            (127, b"python3: command not found\n"),
+            (255, b"ssh: connect to host s.exemplo port 22: Connection timed out\n"),
+            (255, b"ssh: Could not resolve hostname s.exemplo: No such host is known.\n"),
+            (255, b"usuario@s.exemplo: Permission denied (publickey).\n"),
+        ):
+            with self.assertRaises(ErroDeEnvio) as erro:
+                self._enviar(subprocess.CompletedProcess([], codigo, b"", erro_do_ssh))
+            self.assertFalse(erro.exception.talvez_enviado, erro_do_ssh)
+        with mock.patch("alerta_preco.envio.subprocess.run", side_effect=FileNotFoundError("ssh")), self.assertRaises(ErroDeEnvio) as erro:
+            enviar_email("v", "/e", RELATORIO, ())
+        self.assertFalse(erro.exception.talvez_enviado)
+
+    def test_sem_resposta_ou_conexao_caida_o_email_pode_ter_saido(self) -> None:
+        for erro_do_ssh in (b"Connection to s.exemplo closed by remote host.\n", b""):
+            with self.assertRaises(ErroDeEnvio) as erro:
+                self._enviar(subprocess.CompletedProcess([], 255, b"", erro_do_ssh))
+            self.assertTrue(erro.exception.talvez_enviado, erro_do_ssh)
+        with mock.patch("alerta_preco.envio.subprocess.run", side_effect=subprocess.TimeoutExpired("ssh", 1)), self.assertRaises(ErroDeEnvio) as erro:
+            enviar_email("v", "/e", RELATORIO, ())
+        self.assertTrue(erro.exception.talvez_enviado)
+
 
 class TestAvisoNaTela(unittest.TestCase):
     def _no_windows(self, **erros: Exception) -> tuple[mock.MagicMock, mock.MagicMock]:
