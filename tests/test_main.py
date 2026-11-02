@@ -32,9 +32,10 @@ class TestConferirLeitura(unittest.TestCase):
             "[envio]\nvps_ssh = 'u@s.exemplo'\narquivo_env_remoto = '/x'\ndestinatarios_extras = []\n",
             encoding="utf-8",
         )
-        patch = mock.patch("alerta_preco.config.CAMINHO_PADRAO", self.config)
-        patch.start()
-        self.addCleanup(patch.stop)
+        for alvo, valor in (("alerta_preco.config.CAMINHO_PADRAO", self.config), ("alerta_preco.config.PASTA_LOCAL", self.pasta / "local")):
+            patch = mock.patch(alvo, valor)
+            patch.start()
+            self.addCleanup(patch.stop)
 
     def _rodar(self, gabarito: dict[str, object]) -> tuple[int, str]:
         arquivo = self.pasta / "gabarito.json"
@@ -116,7 +117,11 @@ class _Cenario(unittest.TestCase):
             "[envio]\nvps_ssh = 'u@s.exemplo'\narquivo_env_remoto = '/x'\ndestinatarios_extras = []\n",
             encoding="utf-8",
         )
-        for alvo, valor in (("alerta_preco.config.CAMINHO_PADRAO", config), ("alerta_preco.__main__.Banco", _BancoFalso)):
+        for alvo, valor in (
+            ("alerta_preco.config.CAMINHO_PADRAO", config),
+            ("alerta_preco.config.PASTA_LOCAL", self.pasta / "local"),
+            ("alerta_preco.__main__.Banco", _BancoFalso),
+        ):
             patch = mock.patch(alvo, valor)
             patch.start()
             self.addCleanup(patch.stop)
